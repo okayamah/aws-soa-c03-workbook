@@ -1,0 +1,26 @@
+# デフォルトは LF 改行
+* text=auto eol=lf
+
+# Windows ネイティブのスクリプトは CRLF
+*.ps1   text eol=crlf
+*.psm1  text eol=crlf
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# シェルスクリプト・YAML・Python は LF
+*.sh    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.py    text eol=lf
+*.md    text eol=lf
+*.json  text eol=lf
+*.toml  text eol=lf
+
+# バイナリ扱い
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.pdf   binary
+*.zip   binary
+*.gz    binary

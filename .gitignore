@@ -1,0 +1,72 @@
+# === AWS / Secrets ===
+.aws/
+*.pem
+*.ppk
+.env
+.env.*
+!.env.example
+aws-exports.js
+credentials
+config
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# === Node / CDK ===
+node_modules/
+cdk.out/
+cdk.context.json
+*.d.ts.map
+.cdk.staging/
+
+# === Terraform ===
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+!example.tfvars
+crash.log
+
+# === CloudFormation / SAM ===
+.aws-sam/
+samconfig.toml
+packaged.yaml
+packaged.yml
+
+# === IDE / Editor ===
+.vscode/
+!.vscode/settings.json.example
+.idea/
+*.swp
+*.swo
+*~
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Logs ===
+*.log
+logs/
+
+# === Local data ===
+*.sqlite
+*.db
+tmp/
+.tmp/
