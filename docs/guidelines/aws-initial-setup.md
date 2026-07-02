@@ -225,16 +225,16 @@
 
 | # | 項目 | 優先度 | 完了 |
 |---|---|---|---|
-| 1 | ルートユーザー MFA 有効化 | A | [ ] |
-| 2 | IAM パスワードポリシー設定 | A | [ ] |
-| 3 | 管理者用 IAM ユーザー作成 + MFA | A | [ ] |
-| 4 | IAM ユーザーの請求情報アクセス有効化 | A | [ ] |
-| 5 | Cost Explorer 有効化 | A | [ ] |
-| 6 | AWS Budgets 設定（¥1,500 アラート） | B | [ ] |
-| 7 | CloudTrail 証跡作成 | B | [ ] |
-| 8 | AWS Config 有効化 | B | [ ] |
-| 9 | GuardDuty 有効化 | C | [ ] |
-| 10 | GuardDuty 通知設定（SNS + EventBridge） | C | [ ] |
+| 1 | ルートユーザー MFA 有効化 | A | [x] |
+| 2 | IAM パスワードポリシー設定 | A | [x] |
+| 3 | 管理者用 IAM ユーザー作成 + MFA | A | [x] |
+| 4 | IAM ユーザーの請求情報アクセス有効化 | A | [x] |
+| 5 | Cost Explorer 有効化 | A | [x] |
+| 6 | AWS Budgets 設定（¥1,500 アラート） | B | [x] |
+| 7 | CloudTrail 証跡作成 | B | [x] |
+| 8 | AWS Config 有効化 | B | [x] |
+| 9 | GuardDuty 有効化 | C | [ ] アクティベーション待ち |
+| 10 | GuardDuty 通知設定（SNS + EventBridge） | C | [ ] アクティベーション待ち |
 
 ## 参考リンク
 
