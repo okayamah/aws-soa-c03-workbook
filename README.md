@@ -15,7 +15,7 @@ AWS Certified CloudOps Engineer – Associate（**SOA-C03**）取得のための
 - **インフラ費用上限：¥2,000**（AWS 無料プランの $200 クレジット範囲内で運用）
 - **成果物：8週間の終わりに動作する FastAPI ToDo アプリ＋IaC 一式**
 
-詳細な計画は [`plan/SOA-C03_学習計画.md`](./plan/SOA-C03_学習計画.md)、Claude Code 用ルールは [`CLAUDE.md`](./CLAUDE.md) を参照。
+詳細な計画は [`docs/plan/SOA-C03_LearningPlan.md`](./docs/plan/SOA-C03_LearningPlan.md)、Claude Code 用ルールは [`CLAUDE.md`](./CLAUDE.md) を参照。
 
 ## サンプルアプリ「FastAPI ToDo」
 
@@ -98,8 +98,10 @@ aws-soa-c03-workbook/
 ├── CLAUDE.md                 # Claude Code 用コンテキスト・運用ルール
 ├── .gitignore
 ├── .gitattributes
-├── plan/
-│   └── SOA-C03_学習計画.md   # 8週間スケジュール詳細
+├── docs/
+│   ├── plan/
+│   │   └── SOA-C03_LearningPlan.md  # 8週間スケジュール詳細
+│   └── guidelines/           # 運用ルール・テンプレート等
 ├── app/                      # FastAPI ToDo アプリ本体（Week 1 で初版作成）
 │   └── README.md
 ├── notes/                    # サービス別・分野別ノート
