@@ -22,6 +22,12 @@ SOA-C03 学習教材兼ハンズオン環境。Claude Code は「対話型のハ
 - IaC・コマンド生成時は末尾にクリーンアップ手順を必ず付ける
 - シークレット・`.env` は絶対にコミットしない
 - 環境：Windows / Python 3.12 / AWS CLI v2 / UTF-8 / LF
+- コミットは Conventional Commits（`feat:` `fix:` `docs:` `refactor:` `chore:`）
+
+## モデル運用
+
+- IaC 生成・エラー解析・設計判断：メインモデルのまま
+- ノート整形・誤答集計などの定型処理：Haiku で十分（サブエージェント側で `model: haiku` 指定済み）
 
 ## 現在の学習フォーカス
 
