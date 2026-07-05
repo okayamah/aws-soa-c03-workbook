@@ -18,14 +18,7 @@ FastAPI ToDo アプリを動かすためのインフラ定義。**第一選択�
 
 ## タグ規約（必須）
 
-全リソースに以下を付与。CloudFormation テンプレ側で `Tags` セクションに統一して書く。
-
-| Key | Value | 用途 |
-|---|---|---|
-| `Project` | `soa-c03-workbook` | リポジトリ単位 |
-| `App` | `fastapi-todo` | アプリ単位 |
-| `Week` | `1` 〜 `8` | 週単位の追跡 |
-| `Owner` | `<your-handle>` | 多人数になる場合に備える |
+正本は [docs/guidelines/aws-rules.md](../docs/guidelines/aws-rules.md) の「タグ規約」。全リソースに `Project` / `App` / `Week` / `Owner` の4タグを CloudFormation テンプレ側の `Tags` セクションで統一して付与する。
 
 ## デプロイ手順（典型例）
 

@@ -1,0 +1,78 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cfn-lint:*)",
+      "Bash(aws cloudformation validate-template:*)",
+      "Bash(aws cloudformation describe-stacks:*)",
+      "Bash(aws cloudformation describe-stack-events:*)",
+      "Bash(aws cloudformation describe-stack-resources:*)",
+      "Bash(aws cloudformation list-stacks:*)",
+      "Bash(aws cloudformation list-stack-resources:*)",
+      "Bash(aws cloudformation get-template:*)",
+      "Bash(aws cloudformation detect-stack-drift:*)",
+      "Bash(aws cloudformation describe-stack-drift-detection-status:*)",
+      "Bash(aws sts get-caller-identity:*)",
+      "Bash(aws resourcegroupstaggingapi get-resources:*)",
+      "Bash(aws logs describe-log-groups:*)",
+      "Bash(aws logs filter-log-events:*)",
+      "Bash(aws logs tail:*)",
+      "Bash(aws cloudwatch describe-alarms:*)",
+      "Bash(aws cloudwatch list-dashboards:*)",
+      "Bash(aws cloudwatch get-metric-data:*)",
+      "Bash(aws dynamodb list-tables:*)",
+      "Bash(aws dynamodb describe-table:*)",
+      "Bash(aws lambda list-functions:*)",
+      "Bash(aws lambda get-function:*)",
+      "Bash(aws apigateway get-rest-apis:*)",
+      "Bash(aws ce get-cost-and-usage:*)",
+      "Bash(python -m pytest:*)"
+    ],
+    "ask": [
+      "Bash(aws cloudformation deploy:*)",
+      "Bash(aws cloudformation create-stack:*)",
+      "Bash(aws cloudformation update-stack:*)",
+      "Bash(aws cloudformation delete-stack:*)",
+      "Bash(aws cloudformation execute-change-set:*)",
+      "Bash(aws s3 rm:*)",
+      "Bash(aws s3 rb:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(**/*.pem)",
+      "Read(**/*.ppk)",
+      "Read(~/.aws/**)",
+      "Bash(aws iam create-access-key:*)",
+      "Bash(aws iam create-login-profile:*)",
+      "Bash(aws iam delete-user:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/guard_secrets.py"
+          },
+          {
+            "type": "command",
+            "command": "python .claude/hooks/check_region.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/lint_cfn.py"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -169,17 +169,11 @@ python -m venv .venv
 
 ## AWS コスト管理ルール
 
-- **リージョンは `ap-northeast-1` 固定**
-- 全リソースに以下のタグを付与
-  - `Project=soa-c03-workbook`
-  - `App=fastapi-todo`
-  - `Week=<N>`
-  - `Owner=<user>`
-- スタック名は `wk{N}-{purpose}` 形式（例：`wk2-cfn-changeset-demo`、`wk3-todo-fargate`）
-- **作ったら必ず削除**。学習が終わったら `aws cloudformation delete-stack` で破棄
+正本は [`docs/guidelines/aws-rules.md`](./docs/guidelines/aws-rules.md)（リージョン固定・タグ規約・スタック命名・高コストサービスの扱い）。要点は3つ：
+
+- **リージョンは `ap-northeast-1` 固定**、全リソースに規約タグを付与
+- **作ったら必ず削除**。毎日の最後に Claude Code の `/cleanup` で掃除する
 - 高コスト常時稼働サービス（NAT Gateway / ALB / RDS / EKS）は短時間検証→即削除
-- **NAT Gateway は原則使わず VPC Endpoint で代替**
-- 毎日の最後に Claude Code に「今日作ったリソースの掃除」を依頼する習慣を作る
 
 ## 進捗トラッカー
 
@@ -206,29 +200,18 @@ python -m venv .venv
 
 ## Claude Code の使い方（要点）
 
-このリポジトリのルートで `claude` を起動すると、`CLAUDE.md` の内容を前提に動作する。よくある依頼例：
+このリポジトリのルートで `claude` を起動すると、`CLAUDE.md` の内容を前提に動作する。日々の作業は **スキル（スラッシュコマンド）** に集約済み：
 
-```
-# ハンズオン指南
-「Week 1 のテーマは監視。FastAPI ToDo アプリの最小版を
- API Gateway + Lambda + DynamoDB で立ち上げる手順を、
- CloudWatch ログ・メトリクス・アラームと合わせて出して」
+| スキル | 用途 | 依頼例 |
+|---|---|---|
+| `/handson` | 週テーマのハンズオン指南 | 「Week 1 の監視テーマを実機で進めたい」 |
+| `/iac` | CloudFormation 生成〜デプロイ〜掃除 | 「wk2-todo-data.yaml に DynamoDB を書いて。PITR 有効で」 |
+| `/note` | 学習ノート生成（書式固定） | 「メトリクスフィルタとサブスクリプションフィルタの違いをノートに」 |
+| `/mistake` | 誤答ログ記録（書式固定） | 「公式模試の#12を落とした。論点は〜」 |
+| `/cleanup` | 残存リソース棚卸し＋削除手順 | 「今日作ったリソースを掃除して」 |
+| `/weekly-review` | 週次集計・進捗更新・翌週計画 | 「今週の振り返りをやろう」 |
 
-# IaC 作成
-「iac/cloudformation/wk2-todo-data.yaml に DynamoDB テーブルを書いて。
- タグ規約に従い、PITR 有効、cfn-lint も通して」
-
-# ノート生成
-「notes/monitoring/cloudwatch-logs.md に メトリクスフィルタ /
- サブスクリプションフィルタ / Logs Insights の違いを §9 の書式でまとめて」
-
-# 進捗管理
-「mistakes.md の誤答を分野別に集計し、明日1時間でやるべきことを優先順位付きで」
-
-# コスト見守り
-「いまアカウントに残っている学習用リソースを CLI で一覧し、
- 消すべきものとコマンド列を出して」
-```
+シークレット混入ブロック・リージョン固定・CFn 保存時の cfn-lint 自動実行は `.claude/`（hooks / permissions）で強制される。
 
 詳細な運用ルールは [`CLAUDE.md`](./CLAUDE.md) を参照。
 

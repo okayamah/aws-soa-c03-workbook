@@ -49,6 +49,8 @@
 
 ## 5. AWS 費用を ¥2,000 以内に抑えるための運用ルール
 
+> 運用ルールの正本は [docs/guidelines/aws-rules.md](../guidelines/aws-rules.md)。本節は計画立案時のスナップショットであり、乖離した場合は aws-rules.md が優先。
+
 1. AWS 無料プラン（$200／6か月）のクレジット範囲内で運用する。クレジット消費でアカウントが自動閉鎖されるため、原則 ¥0 で完結する。
 2. それでも保険として **AWS Budgets で月額 ¥1,500 のアラート**を設定する。
 3. **作ったら必ず削除する**：CloudFormation で作成 → 検証後 `aws cloudformation delete-stack` で破棄。Claude Code に「今日作ったスタックの掃除」をルーチン依頼する。

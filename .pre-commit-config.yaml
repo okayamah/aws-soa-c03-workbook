@@ -1,0 +1,14 @@
+# ローカルの二重ガード（任意）。有効化：
+#   pip install pre-commit && pre-commit install
+# バージョン更新：pre-commit autoupdate
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.3
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/aws-cloudformation/cfn-lint
+    rev: v1.35.1
+    hooks:
+      - id: cfn-lint
+        files: ^iac/cloudformation/.*\.(yaml|yml)$
