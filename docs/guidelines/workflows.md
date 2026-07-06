@@ -1,33 +1,12 @@
 # Claude Code 期待動作
 
-## ハンズオン指南
+> **本ファイルの手続きはスキルへ移行済み。** 実体は `.claude/skills/` を参照。
 
-1. 達成目標を1行で示す
-2. 手順（コンソール or CLI、迷ったら CLI 優先）
-3. **必ず FastAPI ToDo アプリの一部としての位置付けを意識する**
-4. 検証コマンドと期待される結果
-5. **クリーンアップ手順（必須）**
-6. 試験で問われやすいポイントの注意書き
-
-## IaC 生成
-
-- 既存のアプリ・スタック構成と整合させる
-- タグ規約（`aws-rules.md`）に従う
-- `cfn-lint` を通す前提で書く
-- Outputs に依存される値を出す
-
-## エラー解析
-
-- まず原因の仮説を3つまで挙げる
-- 切り分け手順を順番に提示
-- 修正案は最小権限・最小差分で
-
-## ノート生成
-
-- `templates.md` の書式に従う
-- 公式ドキュメント URL を必ず添える（不確かなら検索を提案）
-
-## 進捗管理
-
-- `mistakes.md` と `progress.md` を読んで分野別に集計
-- 残り日数と未達分野から優先順位を出す
+| 手続き | スキル |
+|---|---|
+| ハンズオン指南 | `/handson`（[.claude/skills/handson/SKILL.md](../../.claude/skills/handson/SKILL.md)） |
+| IaC 生成・エラー解析 | `/iac`（[.claude/skills/iac/SKILL.md](../../.claude/skills/iac/SKILL.md)） |
+| ノート生成 | `/note`（[.claude/skills/note/SKILL.md](../../.claude/skills/note/SKILL.md)） |
+| 誤答記録 | `/mistake`（[.claude/skills/mistake/SKILL.md](../../.claude/skills/mistake/SKILL.md)） |
+| リソース掃除 | `/cleanup`（[.claude/skills/cleanup/SKILL.md](../../.claude/skills/cleanup/SKILL.md)） |
+| 進捗管理・週次レビュー | `/weekly-review`（[.claude/skills/weekly-review/SKILL.md](../../.claude/skills/weekly-review/SKILL.md)） |
