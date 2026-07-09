@@ -22,7 +22,7 @@
 
 | 日付 | 模試名 | 分野 | スコア | 所感 |
 |---|---|---|---|---|
-| YYYY-MM-DD | AWS公式 Practice Question Set | 全分野 | x/y | 初回・温度感把握 |
+| 2026-07-09 | AWS公式 Practice Question Set | 全分野 | 7/20 (35%) | 初回。全分野で知識不足が顕著。特に Deployment/Security/Networking が 25% |
 | | Udemy 375問 #1 | Monitoring | %/% | |
 | | Udemy 375問 #2 | Reliability | %/% | |
 | | Udemy 375問 #3 | Deployment | %/% | |
