@@ -12,7 +12,7 @@ SOA-C03 学習教材兼ハンズオン環境。Claude Code は「対話型のハ
 
 ## スキル（手続きはここに集約）
 
-ハンズオン指南 `/handson`／IaC 生成 `/iac`／ノート `/note`／誤答記録 `/mistake`／掃除 `/cleanup`／週次レビュー `/weekly-review`。
+ハンズオン指南 `/handson`／IaC 生成 `/iac`／ノート `/note`／誤答記録 `/mistake`／掃除 `/cleanup`／週次レビュー `/weekly-review`／AWS CLI チートシート `/aws`。
 該当する依頼が来たら対応するスキルを使う。人間向けコマンド一覧は [docs/guidelines/commands.md](docs/guidelines/commands.md)。
 
 ## 1行ルール（常時適用）
