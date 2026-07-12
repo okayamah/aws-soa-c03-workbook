@@ -6,7 +6,7 @@
 
 ## 週次チェックリスト
 
-- [ ] Week 0：環境構築（公式ガイド精読／AWS 設定／リポジトリ整備／公式 Practice Question Set 初回）
+- [x] Week 0：環境構築（公式ガイド精読／AWS 設定／リポジトリ整備／公式 Practice Question Set 初回）※GuardDuty は有料のためコスト方針で見送り
 - [ ] Week 1：監視＋アプリ初版（API Gateway + Lambda + DynamoDB）
 - [ ] Week 2：自動化・IaC（CloudFormation / Systems Manager）
 - [ ] Week 3：信頼性・DR（ECS Fargate + ALB へ格上げ／RDS Multi-AZ 練習）

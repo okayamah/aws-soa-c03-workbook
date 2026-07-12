@@ -33,7 +33,7 @@ SOA-C03 学習教材兼ハンズオン環境。Claude Code は「対話型のハ
 
 > **このセクションは週次で更新する。**
 
-- 現在の週：Week 0（環境構築）
-- 今週のテーマ：AWS アカウント準備、Budgets 設定、公式試験ガイド精読、公式 Practice Question Set 初回
-- 直近の弱点：（まだ計測前）
-- アプリの現在の状態：未着手（Week 1 で初版作成予定）
+- 現在の週：Week 1（監視・運用①）
+- 今週のテーマ：CloudWatch（メトリクス／アラーム／ログ）を軸に、FastAPI ToDo を最小デプロイ（API Gateway + Lambda + DynamoDB）
+- 直近の弱点：公式 PQS 初回 7/20（35%）。特に Deployment / Security / Networking が各 25% と弱い
+- アプリの現在の状態：Week 1 Day 1 で永続化層の DynamoDB（Todos テーブル）から着手

@@ -233,8 +233,8 @@
 | 6 | AWS Budgets 設定（¥1,500 アラート） | B | [x] |
 | 7 | CloudTrail 証跡作成 | B | [x] |
 | 8 | AWS Config 有効化 | B | [x] |
-| 9 | GuardDuty 有効化 | C | [ ] アクティベーション待ち |
-| 10 | GuardDuty 通知設定（SNS + EventBridge） | C | [ ] アクティベーション待ち |
+| 9 | GuardDuty 有効化 | C | [-] 見送り（30日トライアル後に課金／¥2,000 コスト方針） |
+| 10 | GuardDuty 通知設定（SNS + EventBridge） | C | [-] 見送り（上記に伴い） |
 
 ## 参考リンク
 
