@@ -33,7 +33,7 @@ SOA-C03 学習教材兼ハンズオン環境。Claude Code は「対話型のハ
 
 > **このセクションは週次で更新する。**
 
-- 現在の週：Week 1（監視・運用①）
-- 今週のテーマ：CloudWatch（メトリクス／アラーム／ログ）を軸に、FastAPI ToDo を最小デプロイ（API Gateway + Lambda + DynamoDB）
-- 直近の弱点：公式 PQS 初回 7/20（35%）。特に Deployment / Security / Networking が各 25% と弱い
-- アプリの現在の状態：Week 1 Day 1 で永続化層の DynamoDB（Todos テーブル）から着手
+- 現在の週：Week 2（自動化・IaC）
+- 今週のテーマ：**CloudFormation** 集中学習（Stack／Change Set／Drift Detection）／Systems Manager（Run Command／Automation／Patch／Parameter Store）。Week 1 で CLI 構築した全リソースを CFn 化
+- 直近の弱点：公式 PQS 初回 7/20（35%）のまま未更新（Week 1 は模試なし）。出題比率で重み付けすると弱点優先度は **Deployment(22%) > Networking(18%) > Security(16%)**（いずれも初回正答率25%）。Deployment＝CloudFormationが最重要弱点であり、かつ Week 2 の主題そのもの
+- アプリの現在の状態：Week 1 完了（API Gateway + Lambda + DynamoDB + CloudWatch Alarm/SNS/Dashboard を CLI で構築・動作確認済み）。Week 2 では `Todos` テーブルを CloudFormation **リソースインポート**、他リソースは新規テンプレートで CFn 化する

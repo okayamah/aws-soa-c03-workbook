@@ -1,0 +1,23 @@
+{
+  "version": "2.0",
+  "routeKey": "POST /todos",
+  "rawPath": "/todos",
+  "rawQueryString": "",
+  "headers": {
+    "host": "localhost",
+    "content-type": "application/json"
+  },
+  "requestContext": {
+    "http": {
+      "method": "POST",
+      "path": "/todos",
+      "protocol": "HTTP/1.1",
+      "sourceIp": "127.0.0.1",
+      "userAgent": "local-test"
+    },
+    "requestId": "local-test-create",
+    "stage": "$default"
+  },
+  "body": "{\"title\": \"Lambda から作った ToDo\", \"completed\": false}",
+  "isBase64Encoded": false
+}

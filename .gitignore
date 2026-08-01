@@ -70,3 +70,10 @@ logs/
 *.db
 tmp/
 .tmp/
+
+# === Lambda deploy artifacts ===
+app/package/
+app/function.zip
+
+# === generated from templates (contains account-specific IDs) ===
+scripts/wk1/dashboard.rendered.json
