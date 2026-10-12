@@ -1,0 +1,348 @@
+
+  <!-- ===== Route 53 ===== -->
+  <section class="sec" id="d5-r53">
+    <h3>Route 53：ホストゾーン・レコード・ルーティングポリシー <span class="sk">5.2.2</span></h3>
+    <div class="grid2">
+      <div class="card"><span class="tag">インターネット向け</span><h5>パブリックホストゾーン</h5><p>インターネットからの名前解決に回答。ドメインのレジストラで Route 53 の NS レコード（4 つのネームサーバー）を設定して委任します。</p></div>
+      <div class="card"><span class="tag">VPC 内向け</span><h5>プライベートホストゾーン</h5><p>関連付けた VPC の中からの問い合わせにだけ回答。VPC の <code>enableDnsSupport</code> と <code>enableDnsHostnames</code> が true であることが前提。別アカウントの VPC との関連付けは、承認（<code>create-vpc-association-authorization</code>）→ 関連付けの 2 段階を CLI／API で行います。</p></div>
+    </div>
+    <div class="callout pdf mt">
+      <span class="lbl">演習 PDF の論点（問題 24）</span>
+      <p>プライベートサブネットの DB サーバーにカスタムドメイン名 → <strong>プライベートホストゾーン</strong>に <strong>A レコード</strong>（値はプライベート IP）。IP アドレスを直接指すのは A／AAAA で、CNAME は別のドメイン名を指すときに使います。</p>
+    </div>
+    <h4>レコードタイプとエイリアス</h4>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>タイプ</th><th>値</th><th>注意点</th></tr></thead>
+      <tbody>
+        <tr><td>A／AAAA</td><td>IPv4／IPv6 アドレス</td><td>—</td></tr>
+        <tr><td>CNAME</td><td>別のドメイン名</td><td><strong>ゾーン頂点（example.com そのもの）には作れない</strong>。DNS の問い合わせごとに料金</td></tr>
+        <tr><td>エイリアス（A／AAAA の拡張）</td><td>AWS リソース（ALB、CloudFront、S3 ウェブサイト、API Gateway、Global Accelerator、同じゾーンの別レコードなど）</td><td><strong>ゾーン頂点に作成可能</strong>、AWS リソースへの問い合わせは無料、TTL は自分で設定できない（参照先に従う）、ターゲットのヘルスを評価可能</td></tr>
+        <tr><td>MX・TXT・SRV・CAA・PTR</td><td>メール、検証用文字列、サービス、発行を許す認証局、逆引き</td><td>CAA で ACM（amazon.com）を許可していないと証明書を発行できない</td></tr>
+        <tr><td>NS・SOA</td><td>ネームサーバー、ゾーンの管理情報</td><td>ホストゾーン作成時に自動作成。サブドメインの委任は NS レコードで</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <h4>ルーティングポリシー</h4>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>ポリシー</th><th>動き</th><th>使いどころ</th></tr></thead>
+      <tbody>
+        <tr><td>シンプル</td><td>1 つのレコード（複数値ならランダムな順で全部返す）。ヘルスチェック不可</td><td>単一リソース</td></tr>
+        <tr><td>加重</td><td>重みの比率で回答を振り分け（0 にすると送らない）</td><td>ブルー/グリーン、カナリア、A/B テスト</td></tr>
+        <tr><td>レイテンシー</td><td>利用者から最も遅延の小さいリージョンのレコードを回答</td><td>マルチリージョンでの性能向上</td></tr>
+        <tr><td>フェイルオーバー</td><td>プライマリが異常ならセカンダリ</td><td>アクティブ/パッシブの DR</td></tr>
+        <tr><td>位置情報（Geolocation）</td><td>利用者の大陸・国・州で回答を変える。最も細かい一致が優先、一致なしは「デフォルト」レコード（なければ NODATA）</td><td>国ごとのコンテンツ、法規制による配信制限</td></tr>
+        <tr><td>地理的近接性（Geoproximity）</td><td>リソースの位置と<strong>バイアス</strong>で担当範囲を広げたり縮めたり</td><td>トラフィックの段階的な移行（トラフィックフローで設定）</td></tr>
+        <tr><td>複数値回答</td><td>正常な値を最大 8 個返す</td><td>簡易的なクライアント側の負荷分散（ELB の代わりではない）</td></tr>
+        <tr><td>IP ベース</td><td>利用者の送信元 IP の CIDR（CIDR コレクション）で回答を変える</td><td>特定 ISP や拠点向けの最適化</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <h4>クエリログと DNSSEC</h4>
+    <dl class="kv">
+      <dt>パブリック DNS クエリログ</dt><dd>パブリックホストゾーンへの問い合わせを CloudWatch Logs へ記録。<strong>ロググループは us-east-1</strong> に作り、Route 53 に書き込みを許すリソースポリシーが必要。</dd>
+      <dt>Resolver クエリログ</dt><dd>VPC 内のリソースが発行した DNS 問い合わせ（プライベートホストゾーンや外部ドメインを含む）を CloudWatch Logs・S3・Firehose へ。VPC 単位で関連付け、RAM で共有可能。</dd>
+      <dt>DNSSEC 署名</dt><dd>パブリックホストゾーンに署名し、DNS 応答の改ざんを防止。キー署名キーは us-east-1 の KMS（非対称キー）で管理し、親ゾーンに DS レコードを登録。</dd>
+      <dt>TTL</dt><dd>レコード変更の反映は TTL に左右される。切り替えを予定しているなら事前に TTL を短くしておく。</dd>
+    </dl>
+  </section>
+
+  <!-- ===== Resolver ===== -->
+  <section class="sec" id="d5-resolver">
+    <h3>Route 53 Resolver とハイブリッド DNS <span class="sk">5.2.1</span></h3>
+    <div class="prose">
+      <p>VPC には Amazon 提供の DNS リゾルバー（Route 53 Resolver）があり、VPC CIDR のベース＋2 のアドレス（例 10.0.0.2）または 169.254.169.253 で利用できます。オンプレミスと名前解決を連携させるには、向きに応じて 2 種類のエンドポイントを使い分けます。</p>
+    </div>
+    <figure class="fig mt">
+      <div class="canvas">
+      <svg viewBox="0 0 900 290" role="img" aria-label="オンプレミスからAWSのプライベートホストゾーンを引くときは、オンプレDNSの条件付きフォワーダーからインバウンドエンドポイントへ。VPCからオンプレのドメインを引くときは、転送ルールでアウトバウンドエンドポイントからオンプレDNSへ">
+        <defs><marker id="a-rr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker>
+        <marker id="a-rr-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-ha" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <rect class="s-zone-fill" x="20" y="20" width="240" height="250" rx="8"/><text class="s-tb" x="140" y="44" text-anchor="middle">オンプレミス</text>
+        <rect class="s-box" x="40" y="70" width="200" height="60" rx="6"/><text class="s-tb" x="140" y="96" text-anchor="middle">社内 DNS サーバー</text><text class="s-ts" x="140" y="114" text-anchor="middle">条件付きフォワーダー</text>
+        <rect class="s-box" x="40" y="180" width="200" height="60" rx="6"/><text class="s-tb" x="140" y="206" text-anchor="middle">corp.local ゾーン</text><text class="s-ts" x="140" y="224" text-anchor="middle">オンプレの名前</text>
+        <rect class="s-box2" x="300" y="120" width="120" height="50" rx="6"/><text class="s-t" x="360" y="142" text-anchor="middle">VPN／</text><text class="s-t" x="360" y="160" text-anchor="middle">Direct Connect</text>
+        <rect class="s-zone" x="460" y="20" width="420" height="250" rx="8"/><text class="s-tb" x="670" y="44" text-anchor="middle">VPC</text>
+        <rect class="s-acc" x="480" y="64" width="170" height="60" rx="6"/><text class="s-tb" x="565" y="90" text-anchor="middle">インバウンド</text><text class="s-tb" x="565" y="108" text-anchor="middle">エンドポイント</text>
+        <rect class="s-acc" x="480" y="186" width="170" height="60" rx="6"/><text class="s-tb" x="565" y="212" text-anchor="middle">アウトバウンド</text><text class="s-tb" x="565" y="230" text-anchor="middle">エンドポイント</text>
+        <rect class="s-box2" x="700" y="64" width="160" height="60" rx="6"/><text class="s-tb" x="780" y="88" text-anchor="middle">Resolver</text><text class="s-ts" x="780" y="106" text-anchor="middle">プライベートゾーン</text>
+        <rect class="s-box2" x="700" y="186" width="160" height="60" rx="6"/><text class="s-tb" x="780" y="210" text-anchor="middle">転送ルール</text><text class="s-ts" x="780" y="228" text-anchor="middle">corp.local → 社内 DNS</text>
+        <path class="s-la" d="M240 92 C 330 70, 400 80, 476 90" marker-end="url(#a-rr-a)"/>
+        <line class="s-la" x1="650" y1="94" x2="696" y2="94" marker-end="url(#a-rr-a)"/>
+        <text class="s-ts" x="350" y="60" text-anchor="middle">① example.internal を問い合わせ</text>
+        <line class="s-l" x1="780" y1="124" x2="780" y2="182" marker-end="url(#a-rr)"/>
+        <text class="s-ts" x="772" y="158" text-anchor="end">② EC2 が corp.local を問い合わせ</text>
+        <line class="s-l" x1="700" y1="216" x2="654" y2="216" marker-end="url(#a-rr)"/>
+        <path class="s-l" d="M480 222 C 400 250, 330 240, 244 214" marker-end="url(#a-rr)"/>
+        <text class="s-ts" x="360" y="262" text-anchor="middle">TCP/UDP 53</text>
+      </svg>
+      </div>
+      <figcaption><b>Resolver エンドポイントの向き。</b>名前は「AWS から見たクエリの向き」です。<strong>インバウンド</strong>＝外（オンプレ）から VPC へ入ってくるクエリを受ける、<strong>アウトバウンド</strong>＝VPC から外へ出ていくクエリを転送する。エンドポイントは可用性のため 2 つ以上の AZ に ENI を置きます。</figcaption>
+    </figure>
+    <dl class="kv mt">
+      <dt>インバウンドの SG</dt><dd>オンプレの DNS サーバーからの <strong>TCP／UDP 53 のインバウンドを許可</strong>。アウトバウンドは応答を返すため全ポートを許可するのが推奨。</dd>
+      <dt>アウトバウンドの SG</dt><dd>転送先 DNS サーバーへの TCP／UDP 53 のアウトバウンドを許可。</dd>
+      <dt>転送ルール</dt><dd>ドメインごとに転送先を指定し、VPC に関連付け。RAM で他アカウントの VPC と共有できる。「システムルール」で特定サブドメインだけ Resolver に解決させる例外も作れる。</dd>
+      <dt>オンプレ側の設定</dt><dd>AWS のゾーン名（例 <code>example.internal</code>）をインバウンドエンドポイントの IP へ転送する条件付きフォワーダーが必要。</dd>
+    </dl>
+    <div class="callout pdf mt">
+      <span class="lbl">演習 PDF の論点（問題 20）</span>
+      <p>オンプレミスの仮想サーバーから Route 53 のレコードを照会 → <strong>インバウンドエンドポイント</strong>を作り、オンプレ DNS からの TCP/UDP 53 の<strong>インバウンド</strong>を許可する SG を付ける。アウトバウンドエンドポイントは逆向き（VPC → オンプレ）です。</p>
+    </div>
+  </section>
+
+  <!-- ===== CloudFront ===== -->
+  <section class="sec" id="d5-cf">
+    <h3>CloudFront によるコンテンツ配信とキャッシュ <span class="sk">5.2.3</span> <span class="sk">5.3.3</span></h3>
+    <figure class="fig">
+      <div class="canvas">
+      <svg viewBox="0 0 900 220" role="img" aria-label="ビューワーのリクエストはエッジロケーション、リージョナルエッジキャッシュ、任意のOrigin Shieldを経てオリジンに届く。キャッシュキーが一致すれば手前で応答する">
+        <defs><marker id="a-cf" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker>
+        <marker id="a-cf-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-hg" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <rect class="s-box" x="20" y="70" width="120" height="60" rx="6"/><text class="s-tb" x="80" y="104" text-anchor="middle">ビューワー</text>
+        <rect class="s-acc" x="190" y="60" width="150" height="80" rx="6"/><text class="s-tb" x="265" y="92" text-anchor="middle">エッジロケーション</text><text class="s-ts" x="265" y="112" text-anchor="middle">Functions・WAF</text>
+        <rect class="s-acc" x="390" y="60" width="150" height="80" rx="6"/><text class="s-tb" x="465" y="92" text-anchor="middle">リージョナル</text><text class="s-tb" x="465" y="110" text-anchor="middle">エッジキャッシュ</text>
+        <rect class="s-box2" x="590" y="60" width="130" height="80" rx="6"/><text class="s-tb" x="655" y="92" text-anchor="middle">Origin Shield</text><text class="s-ts" x="655" y="112" text-anchor="middle">（任意）</text>
+        <rect class="s-box" x="770" y="40" width="110" height="50" rx="6"/><text class="s-t" x="825" y="62" text-anchor="middle">S3</text><text class="s-tm" x="825" y="78" text-anchor="middle">OAC で保護</text>
+        <rect class="s-box" x="770" y="110" width="110" height="50" rx="6"/><text class="s-t" x="825" y="132" text-anchor="middle">ALB・EC2</text><text class="s-tm" x="825" y="148" text-anchor="middle">カスタムオリジン</text>
+        <line class="s-l" x1="140" y1="92" x2="186" y2="92" marker-end="url(#a-cf)"/><line class="s-l" x1="340" y1="92" x2="386" y2="92" marker-end="url(#a-cf)"/><line class="s-l" x1="540" y1="92" x2="586" y2="92" marker-end="url(#a-cf)"/>
+        <line class="s-l" x1="720" y1="90" x2="766" y2="66" marker-end="url(#a-cf)"/><line class="s-l" x1="720" y1="110" x2="766" y2="134" marker-end="url(#a-cf)"/>
+        <path class="s-lg" d="M265 140 V176 H80 V134" marker-end="url(#a-cf-g)"/>
+        <text class="s-ts" x="172" y="196" text-anchor="middle">キャッシュヒット：その場で応答（X-Cache: Hit from cloudfront）</text>
+        <text class="s-ts" x="560" y="176" text-anchor="middle">ミスのときだけ奥へ。Origin Shield で各地のミスを 1 か所に集約</text>
+      </svg>
+      </div>
+      <figcaption><b>CloudFront のキャッシュ階層。</b>キャッシュは「キャッシュキー」（既定は URL のパス＋ドメイン、加えてキャッシュポリシーで指定したクエリ文字列・ヘッダー・Cookie）単位で保存されます。キーに含める要素が多いほど同じオブジェクトが別々にキャッシュされ、ヒット率が落ちます。</figcaption>
+    </figure>
+
+    <h4>キャッシュ保持期間（TTL）の決まり方</h4>
+    <figure class="fig">
+      <div class="canvas">
+      <svg viewBox="0 0 900 230" role="img" aria-label="最小TTL0.5時間、最大TTL2時間の設定で、max-ageが15分なら0.5時間、1時間なら1時間、2.5時間なら2時間でキャッシュされる">
+        <defs><marker id="a-ttl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-ha" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <rect class="s-acc" x="270" y="30" width="360" height="160" rx="4" style="fill-opacity:.4"/>
+        <line class="s-axis" x1="150" y1="190" x2="810" y2="190"/>
+        <line class="s-grid" x1="150" y1="30" x2="150" y2="190"/><line class="s-grid" x1="390" y1="30" x2="390" y2="190"/><line class="s-grid" x1="510" y1="30" x2="510" y2="190"/><line class="s-grid" x1="750" y1="30" x2="750" y2="190"/>
+        <line class="s-la" x1="270" y1="24" x2="270" y2="196"/><line class="s-la" x1="630" y1="24" x2="630" y2="196"/>
+        <text class="s-tm" x="150" y="210" text-anchor="middle">0</text><text class="s-tm" x="270" y="210" text-anchor="middle">0.5h</text><text class="s-tm" x="390" y="210" text-anchor="middle">1h</text><text class="s-tm" x="510" y="210" text-anchor="middle">1.5h</text><text class="s-tm" x="630" y="210" text-anchor="middle">2h</text><text class="s-tm" x="750" y="210" text-anchor="middle">2.5h</text>
+        <text class="s-tb" x="270" y="18" text-anchor="middle">最小 TTL</text><text class="s-tb" x="630" y="18" text-anchor="middle">最大 TTL</text>
+        <text class="s-t" x="140" y="64" text-anchor="end">max-age=15分</text>
+        <circle class="f-muted" cx="210" cy="60" r="6"/><line class="s-la" x1="218" y1="60" x2="262" y2="60" marker-end="url(#a-ttl)"/><circle class="f-acc" cx="270" cy="60" r="6"/><text class="s-ts" x="282" y="64">→ 0.5h（最小 TTL に引き上げ）</text>
+        <text class="s-t" x="140" y="112" text-anchor="end">max-age=1時間</text>
+        <circle class="f-acc" cx="390" cy="108" r="6"/><text class="s-ts" x="402" y="112">→ 1h（範囲内なのでヘッダーどおり）</text>
+        <text class="s-t" x="140" y="160" text-anchor="end">max-age=2.5時間</text>
+        <circle class="f-muted" cx="750" cy="156" r="6"/><line class="s-la" x1="742" y1="156" x2="638" y2="156" marker-end="url(#a-ttl)"/><circle class="f-acc" cx="630" cy="156" r="6"/><text class="s-ts" x="618" y="148" text-anchor="end">2h（最大 TTL に切り下げ）←</text>
+      </svg>
+      </div>
+      <figcaption><b>オリジンのヘッダーは最小 TTL〜最大 TTL の範囲に収められる。</b>灰色の点がオリジンの <code>Cache-Control: max-age</code>、青い点が実際のキャッシュ期間です。ヘッダーがなければ<strong>デフォルト TTL</strong>を使います。<code>max-age</code> と <code>Expires</code> が両方あれば <code>max-age</code> が優先、<code>s-maxage</code> があればさらにそちらが優先です（演習 PDF 問題 4：答えは 1 時間）。</figcaption>
+    </figure>
+    <h4>キャッシュ動作を構成するポリシー</h4>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>ポリシー</th><th>決めるもの</th><th>ヒット率への影響</th></tr></thead>
+      <tbody>
+        <tr><td>キャッシュポリシー</td><td>TTL（最小・デフォルト・最大）と<strong>キャッシュキー</strong>に含めるクエリ文字列・ヘッダー・Cookie、圧縮</td><td>キーに含める要素は「オリジンが内容を変えるのに使うものだけ」に絞る</td></tr>
+        <tr><td>オリジンリクエストポリシー</td><td>キャッシュキーには含めずに<strong>オリジンへ転送</strong>する値</td><td>オリジンが必要とする情報を渡しつつ、キャッシュは分割しない</td></tr>
+        <tr><td>レスポンスヘッダーポリシー</td><td>ビューワーに返すヘッダー（CORS、セキュリティヘッダー）</td><td>影響なし</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <h4>キャッシュヒット率を上げる方法</h4>
+    <ol class="ladder">
+      <li><div><span class="q">オリジンで長めの max-age を返す</span><p class="a">実用上許される最長の <code>Cache-Control: max-age</code>。更新はファイル名のバージョニングで対応。</p></div></li>
+      <li><div><span class="q">キャッシュキーを最小化</span><p class="a">必要なクエリ文字列だけを転送（順序や大文字小文字も統一）。Cookie・ヘッダーの全転送をやめる。<code>User-Agent</code> ではなく <code>CloudFront-Is-Mobile-Viewer</code> などのデバイス判定ヘッダーを使う。</p></div></li>
+      <li><div><span class="q">静的と動的でキャッシュ動作を分ける</span><p class="a">パスパターン（<code>/static/*</code> など）ごとにキャッシュポリシーを分ける。</p></div></li>
+      <li><div><span class="q">Origin Shield を有効化</span><p class="a">複数のリージョナルエッジキャッシュからのミスを 1 つのキャッシュ層に集約し、オリジンへのリクエストを削減。</p></div></li>
+    </ol>
+    <div class="callout pdf mt">
+      <span class="lbl">演習 PDF の論点（問題 23）</span>
+      <p>ヒット率向上 → 「オリジンが一意のオブジェクトを返すのに使うクエリ文字列だけを転送」と「max-age を実用的な最長値に」。署名付き URL／Cookie はアクセス制限のための機能で、ヒット率とは無関係です。</p>
+    </div>
+
+    <h4>キャッシュの削除：無効化とバージョニング</h4>
+    <div class="grid2">
+      <div class="card"><span class="tag">即時に消したい</span><h5>無効化（Invalidation）</h5><p><code>aws cloudfront create-invalidation --distribution-id E1ABCD --paths "/images/photo.jpg" "/css/*"</code>。エッジのキャッシュを期限前に破棄し、次のリクエストでオリジンから取り直させます。毎月一定数のパスまで無料で、超えると課金。ワイルドカードはパスの末尾に使えます。<strong>オリジンからファイルを消しただけでは、TTL が切れるまでエッジから配信され続けます。</strong></p></div>
+      <div class="card"><span class="tag">日常の更新</span><h5>ファイル名のバージョニング</h5><p><code>app.v2.css</code> のように名前を変えて参照先を更新。キャッシュを長く保てて無効化料金もかからず、ロールバックも容易。ただし既に配信された古い URL のキャッシュを消す手段ではありません。</p></div>
+    </div>
+    <div class="callout pdf mt">
+      <span class="lbl">演習 PDF の論点（問題 17）</span>
+      <p>誤って配信された写真をキャッシュから消す → <strong>無効化</strong>が直接の手段。新しいバージョンのファイルを提供する方法もあわせて正解とされています。RTMP ディストリビューションは廃止済み、「CloudFront コマンドで手動削除」「S3 で配信無効化」は存在しない操作です。</p>
+    </div>
+
+    <h4>オリジンの保護とアクセス制限</h4>
+    <dl class="kv">
+      <dt>OAC（オリジンアクセスコントロール）</dt><dd>S3 オリジンを CloudFront 経由でしか読めないようにする。旧方式の OAI の後継で、SSE-KMS の暗号化オブジェクトにも対応（キーポリシーで CloudFront を許可）。バケットポリシーは下の例。</dd>
+      <dt>カスタムオリジンの保護</dt><dd>ALB の SG で CloudFront のマネージドプレフィックスリスト（<code>com.amazonaws.global.cloudfront.origin-facing</code>）だけを許可。さらにカスタムヘッダーを付けて ALB のルールで検証。VPC オリジンを使えば ALB をプライベートサブネットに置ける。</dd>
+      <dt>署名付き URL と署名付き Cookie</dt><dd>有料会員限定などのアクセス制限。<strong>1 ファイルなら署名付き URL、多数のファイル（動画のセグメント、会員エリア全体）なら署名付き Cookie</strong>。信頼されたキーグループの鍵で署名。</dd>
+      <dt>地理的制限</dt><dd>国単位で配信の許可・拒否。</dd>
+      <dt>HTTPS</dt><dd>ビューワープロトコルポリシー、代替ドメイン名（CNAME）と <strong>us-east-1 の ACM 証明書</strong>。</dd>
+      <dt>エッジでの処理</dt><dd>CloudFront Functions（軽量・高速。ヘッダー操作、URL 書き換え、リダイレクト）と Lambda@Edge（ネットワークアクセスや長めの処理が可能）。</dd>
+      <dt>オリジンフェイルオーバー</dt><dd>オリジングループでプライマリが指定のステータスコード（5xx など）を返したらセカンダリへ。GET／HEAD などが対象。</dd>
+    </dl>
+<pre class="mt"><code>// OAC 用の S3 バケットポリシー
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": { "Service": "cloudfront.amazonaws.com" },
+    "Action": "s3:GetObject",
+    "Resource": "arn:aws:s3:::todo-assets/*",
+    "Condition": {
+      "StringEquals": { "AWS:SourceArn": "arn:aws:cloudfront::111122223333:distribution/E1ABCDEXAMPLE" }
+    }
+  }]
+}</code></pre>
+    <h4>CloudFront のエラーの切り分け</h4>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>症状</th><th>主な原因</th><th>対処</th></tr></thead>
+      <tbody>
+        <tr><td>403 Forbidden</td><td>S3 のバケットポリシーが OAC を許可していない、KMS キーの許可不足、地理的制限、WAF でブロック、署名付き URL の期限切れ、代替ドメイン名の未設定</td><td>バケットポリシーとキーポリシーの確認、WAF ログ、ディストリビューションの設定</td></tr>
+        <tr><td>502 Bad Gateway</td><td>オリジンとの TLS 接続の失敗（証明書のドメイン名不一致、期限切れ、自己署名、プロトコル／暗号の不一致）</td><td>オリジンの証明書と、ディストリビューションのオリジンドメイン名・プロトコル設定</td></tr>
+        <tr><td>503 Service Unavailable</td><td>オリジンの容量不足、オリジン側のエラー</td><td>オリジンのスケーリング</td></tr>
+        <tr><td>504 Gateway Timeout</td><td>オリジンが時間内に応答しない、<strong>オリジンの SG・ファイアウォールが CloudFront を許可していない</strong></td><td>SG にマネージドプレフィックスリスト、オリジンの応答タイムアウト設定、オリジンの性能</td></tr>
+        <tr><td>古いコンテンツが表示される</td><td>TTL 内のキャッシュ</td><td>無効化、ファイル名のバージョニング、TTL の見直し</td></tr>
+        <tr><td>ヒット率が低い</td><td>キャッシュキーが細かすぎる、TTL が短い、<code>Cache-Control: no-store</code></td><td>キャッシュポリシーの見直し（前述）</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="prose mt">エラー応答もキャッシュされます（エラーキャッシュの最小 TTL、既定 10 秒）。オリジンを直しても数秒〜設定時間はエラーが返ることがあります。監視は <code>4xxErrorRate</code>・<code>5xxErrorRate</code>・<code>TotalErrorRate</code>、追加メトリクスを有効にすると <code>CacheHitRate</code>・<code>OriginLatency</code> も見られます。</p>
+  </section>
+
+  <!-- ===== Global Accelerator ===== -->
+  <section class="sec" id="d5-ga">
+    <h3>Global Accelerator <span class="sk">5.2.3</span></h3>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>観点</th><th>CloudFront</th><th>Global Accelerator</th></tr></thead>
+      <tbody>
+        <tr><td>本質</td><td>コンテンツの<strong>キャッシュ</strong>と配信</td><td>エニーキャストの<strong>固定 IP</strong>で AWS バックボーンへ最寄りから入れる</td></tr>
+        <tr><td>プロトコル</td><td>HTTP／HTTPS（WebSocket 含む）</td><td>TCP／UDP（HTTP 以外も可）</td></tr>
+        <tr><td>入口</td><td>ドメイン名（IP は変わる）</td><td><strong>2 つの静的 IPv4 アドレス</strong>（ファイアウォールの許可リストに登録しやすい）</td></tr>
+        <tr><td>エンドポイント</td><td>S3、ALB、EC2、任意の HTTP サーバー</td><td>ALB、NLB、EC2、Elastic IP</td></tr>
+        <tr><td>フェイルオーバー</td><td>オリジングループ</td><td>ヘルスチェックによる高速なリージョン切り替え（DNS の TTL に依存しない）。<strong>トラフィックダイヤル</strong>でリージョンごとの流量、エンドポイントの重みで配分</td></tr>
+        <tr><td>向いている用途</td><td>静的・動的 Web コンテンツの配信</td><td>ゲーム、IoT、VoIP、固定 IP が必要な API、マルチリージョンの高速フェイルオーバー</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <!-- ===== Troubleshooting ===== -->
+  <section class="sec" id="d5-trouble">
+    <h3>VPC 設定のトラブルシューティング <span class="sk">5.3.1</span> <span class="sk">5.3.4</span></h3>
+    <h4>インターネットから EC2 につながらない</h4>
+    <ol class="ladder">
+      <li><div><span class="q">IGW とルート</span><p class="a">VPC に IGW がアタッチされ、サブネットのルートテーブルに <code>0.0.0.0/0 → igw-</code> があるか（そのサブネットに関連付いた表か）。</p></div></li>
+      <li><div><span class="q">パブリック IP</span><p class="a">インスタンスにパブリック IPv4 か Elastic IP があるか。サブネットの自動割り当て設定、ASG の起動テンプレートの設定。</p></div></li>
+      <li><div><span class="q">セキュリティグループ</span><p class="a">インバウンドで送信元とポートを許可しているか。</p></div></li>
+      <li><div><span class="q">NACL</span><p class="a">インバウンドの許可と、アウトバウンドのエフェメラルポート。番号順に拒否ルールが先に当たっていないか。</p></div></li>
+      <li><div><span class="q">OS とアプリ</span><p class="a">OS のファイアウォール、サービスが起動して該当ポートで待ち受けているか。ここで初めてインスタンス内部を疑う。</p></div></li>
+    </ol>
+    <h4>プライベートサブネットから外に出られない</h4>
+    <ol class="ladder">
+      <li><div><span class="q">プライベート側のルート</span><p class="a"><code>0.0.0.0/0 → nat-</code> があるか（IGW を向けても出られない）。</p></div></li>
+      <li><div><span class="q">NAT ゲートウェイの置き場所と状態</span><p class="a">パブリック NAT が<strong>パブリックサブネット</strong>にあり、そのサブネットのルートが IGW を向いているか。状態が Available か、EIP が付いているか。</p></div></li>
+      <li><div><span class="q">NACL と SG</span><p class="a">プライベート・パブリック両サブネットの NACL で、行きと戻り（エフェメラル）を許可しているか。インスタンスの SG のアウトバウンド。</p></div></li>
+    </ol>
+    <h4>VPC エンドポイント経由のアクセスが失敗する</h4>
+    <ol class="ladder">
+      <li><div><span class="q">ゲートウェイ型</span><p class="a">エンドポイントが<strong>そのサブネットのルートテーブル</strong>に関連付けられているか、同じリージョンのバケットか、エンドポイントポリシーとバケットポリシーで許可しているか。</p></div></li>
+      <li><div><span class="q">インターフェイス型</span><p class="a">プライベート DNS が有効か（VPC の DNS 属性も true）、エンドポイントの SG がクライアントからの 443 を許可しているか、エンドポイントポリシー。</p></div></li>
+    </ol>
+    <div class="grid2 mt">
+      <div class="card"><span class="tag">設定を静的に解析</span><h5>VPC Reachability Analyzer</h5><p>送信元と送信先（インスタンス、ENI、IGW、TGW など）を指定すると、実際にパケットを送らずに設定を解析し、<strong>到達できない場合はどの部品（SG、NACL、ルート）が原因か</strong>を示します。変更後の確認にも使えます。</p></div>
+      <div class="card"><span class="tag">意図しない経路の発見</span><h5>Network Access Analyzer</h5><p>「インターネットから DB サブネットへ到達できる経路がないこと」のような条件を定義し、それに反する経路を洗い出します。監査向け。パケットの中身を見たいなら Traffic Mirroring。</p></div>
+    </div>
+  </section>
+
+  <!-- ===== Logs ===== -->
+  <section class="sec" id="d5-logs">
+    <h3>ネットワークログの収集と解釈 <span class="sk">5.3.2</span></h3>
+    <h4>VPC フローログ</h4>
+    <div class="prose">
+      <p>フローログは VPC・サブネット・ENI 単位で作成し、CloudWatch Logs・S3・Data Firehose へ出力します。トラフィックの経路の外で収集されるため、有効にしても性能に影響しません。既定の形式（バージョン 2）のフィールドは次の順です。</p>
+    </div>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th class="num">#</th><th>フィールド</th><th>問題 11 の 1 行目の値</th><th>意味</th></tr></thead>
+      <tbody>
+        <tr><td class="num">1</td><td><code>version</code></td><td><code>2</code></td><td>形式のバージョン</td></tr>
+        <tr><td class="num">2</td><td><code>account-id</code></td><td><code>178982904800</code></td><td>アカウント ID</td></tr>
+        <tr><td class="num">3</td><td><code>interface-id</code></td><td><code>eni-1267b8ca</code></td><td>ENI</td></tr>
+        <tr><td class="num">4</td><td><code>srcaddr</code></td><td><code>172.178.45.11</code></td><td>送信元 IP</td></tr>
+        <tr><td class="num">5</td><td><code>dstaddr</code></td><td><code>10.0.1.110</code></td><td>送信先 IP</td></tr>
+        <tr><td class="num">6</td><td><code>srcport</code></td><td><code>0</code></td><td>送信元ポート（ICMP は 0）</td></tr>
+        <tr><td class="num">7</td><td><code>dstport</code></td><td><code>0</code></td><td>送信先ポート</td></tr>
+        <tr><td class="num">8</td><td><code>protocol</code></td><td><code>1</code></td><td>IANA のプロトコル番号（1=ICMP、6=TCP、17=UDP）</td></tr>
+        <tr><td class="num">9</td><td><code>packets</code></td><td><code>4</code></td><td>パケット数</td></tr>
+        <tr><td class="num">10</td><td><code>bytes</code></td><td><code>336</code></td><td>バイト数</td></tr>
+        <tr><td class="num">11–12</td><td><code>start</code> / <code>end</code></td><td>Unix 時刻</td><td>集約ウィンドウの開始と終了</td></tr>
+        <tr><td class="num">13</td><td><code>action</code></td><td><code>ACCEPT</code></td><td>SG と NACL で許可されたか拒否されたか</td></tr>
+        <tr><td class="num">14</td><td><code>log-status</code></td><td><code>OK</code></td><td>OK／NODATA／SKIPDATA</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout tip mt">
+      <span class="lbl">試験の着眼点：ACCEPT と REJECT の組み合わせで原因を当てる</span>
+      <ul>
+        <li><strong>行き ACCEPT・戻り REJECT</strong> → 戻りを自動で許可する SG ではありえないので、<strong>NACL のアウトバウンド</strong>（ステートレス）が原因（演習 PDF 問題 11 の正解）。</li>
+        <li><strong>行きが REJECT</strong> → SG のインバウンドか NACL のインバウンド。どちらかは他の情報で判断。</li>
+        <li>フローログに<strong>記録されない</strong>通信：Amazon DNS サーバーへの問い合わせ、インスタンスメタデータ（169.254.169.254）、Time Sync、DHCP、Windows ライセンス認証など。</li>
+        <li>カスタム形式で <code>vpc-id</code>・<code>subnet-id</code>・<code>tcp-flags</code>・<code>pkt-srcaddr</code>（NAT 経由の元の送信元）・<code>flow-direction</code>・<code>traffic-path</code> などを追加できる。集約間隔は既定 10 分、1 分も選べる。</li>
+      </ul>
+    </div>
+<pre class="mt"><code># CloudWatch Logs Insights：拒否された通信の上位送信元
+fields @timestamp, srcAddr, dstAddr, dstPort, action
+| filter action = "REJECT"
+| stats count(*) as rejects by srcAddr, dstPort
+| sort rejects desc
+| limit 20</code></pre>
+    <p class="prose mt">S3 に出力した大量のフローログは Amazon Athena でテーブルを定義して SQL で分析します（パーティション分割でスキャン量を削減）。</p>
+
+    <h4>その他のネットワークログ</h4>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>ログ</th><th>出力先</th><th>読みどころ</th></tr></thead>
+      <tbody>
+        <tr><td>ELB アクセスログ</td><td>S3（既定で無効）</td><td><code>elb_status_code</code> と <code>target_status_code</code> の違い、<code>request_processing_time</code>・<code>target_processing_time</code>・<code>response_processing_time</code>。ターゲットが応答しなかった場合は処理時間が <code>-1</code>、ターゲットのステータスが <code>-</code></td></tr>
+        <tr><td>ALB 接続ログ</td><td>S3</td><td>TLS ハンドシェイクの失敗、クライアント証明書（mTLS）の検証結果</td></tr>
+        <tr><td>AWS WAF ログ</td><td>CloudWatch Logs（<code>aws-waf-logs-</code> 接頭辞）・S3・Firehose</td><td><code>action</code>（ALLOW／BLOCK／COUNT）、<code>terminatingRuleId</code>（どのルールで止まったか）、送信元 IP、国、URI。誤検知の調査</td></tr>
+        <tr><td>CloudFront 標準ログ</td><td>S3、CloudWatch Logs、Firehose</td><td><code>x-edge-result-type</code>（Hit／Miss／RefreshHit／Error）、<code>sc-status</code>、<code>time-taken</code>、エッジロケーション。リアルタイムログは Kinesis Data Streams へ</td></tr>
+        <tr><td>Network Firewall ログ</td><td>S3・CloudWatch Logs・Firehose</td><td>アラートログ（ルールに一致した通信）とフローログ</td></tr>
+        <tr><td>Route 53 Resolver クエリログ</td><td>CloudWatch Logs・S3・Firehose</td><td>どのリソースがどのドメインを引いたか、DNS Firewall のブロック</td></tr>
+        <tr><td>コンテナログ</td><td>CloudWatch Logs（<code>awslogs</code>、FireLens／Fluent Bit）</td><td>ECS タスク・EKS Pod のアプリログ。接続エラー、DNS 解決失敗、タイムアウトの記録</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <!-- ===== Netmon ===== -->
+  <section class="sec" id="d5-netmon">
+    <h3>CloudWatch のネットワーク監視サービス <span class="sk">5.3.5</span></h3>
+    <div class="prose">
+      <p>SOA-C03 で新しく追加されたスキルです。「どこの、何の性能を測るか」で 3 つのサービスを区別します。</p>
+    </div>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>サービス</th><th>測るもの</th><th>仕組み</th><th>典型的な問い</th></tr></thead>
+      <tbody>
+        <tr><td>Internet Monitor</td><td><strong>インターネット上の利用者</strong>からアプリ（CloudFront、VPC、NLB など）までの可用性とパフォーマンス</td><td>AWS が持つ世界のインターネット計測データを利用。都市×ネットワーク（ASN）単位で影響を表示し、ヘルスイベントを通知</td><td>「特定の国・ISP の利用者だけ遅い」「インターネット側の障害かアプリ側か」</td></tr>
+        <tr><td>Network Synthetic Monitor</td><td><strong>AWS からオンプレミス</strong>など特定の宛先へのハイブリッド経路の遅延とパケットロス</td><td>VPC のサブネットから ICMP／TCP のプローブを送る（エージェント不要）。AWS 側の劣化かどうかを示すネットワークヘルス指標</td><td>「Direct Connect／VPN 経由のオンプレ通信が遅い原因は AWS 側か」</td></tr>
+        <tr><td>Network Flow Monitor</td><td><strong>AWS 内のワークロード間</strong>（EC2、EKS など）の TCP 通信の性能</td><td>インスタンスにエージェントを入れて TCP の再送やレイテンシーを計測。AZ 間・VPC 間・サービス宛ての流れを可視化</td><td>「どのワークロード間の通信で再送が増えているか」</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout tip mt">
+      <span class="lbl">試験の着眼点：調べたいことから道具を選ぶ</span>
+      <ul>
+        <li>設定の誤りで通らない → Reachability Analyzer。</li>
+        <li>通信は許可されているはずだが拒否されている記録を見たい → VPC フローログ。</li>
+        <li>つながるが遅い・不安定（オンプレ向け）→ Network Synthetic Monitor。</li>
+        <li>つながるが遅い（エンドユーザー側）→ Internet Monitor。</li>
+        <li>つながるが遅い（AWS 内のサービス間）→ Network Flow Monitor。</li>
+        <li>パケットの中身を見たい → Traffic Mirroring。</li>
+      </ul>
+    </div>
+  </section>
+</section>

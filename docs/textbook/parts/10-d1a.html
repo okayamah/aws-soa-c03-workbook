@@ -1,0 +1,611 @@
+
+<!-- ================= Chapter 1 ================= -->
+<section class="chapter" id="d1">
+  <div class="chapter-head">
+    <span class="num"><span class="dot d1"></span>CONTENT DOMAIN 1 · TASK 1.1 / 1.2 / 1.3</span>
+    <h2>モニタリング、ログ記録、分析、修復、パフォーマンスの最適化</h2>
+    <div class="meta"><span class="weight">採点対象の 22%</span><span class="weight">約 11 問</span></div>
+  </div>
+  <div class="prose">
+    <p>この分野は「観測する（1.1）→ 異常を見つけて直す（1.2）→ そもそも性能とコストを最適化する（1.3）」という運用の流れそのものです。中心にあるのは Amazon CloudWatch で、ここにメトリクスとログが集まり、アラームが状態を判定し、EventBridge や Systems Manager が修復を実行します。まず全体の流れを 1 枚で押さえてから、各部品に入ります。</p>
+  </div>
+
+  <figure class="fig mt2">
+    <div class="canvas">
+    <svg viewBox="0 0 900 380" role="img" aria-label="データソースからCloudWatchのメトリクスとログへ、ログはメトリクスフィルターでメトリクスになり、アラームが判定して直接アクションかEventBridge経由で修復が走る">
+      <defs><marker id="a-cwflow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker>
+      <marker id="a-cwflow-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-ha" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+      <text class="s-tm" x="20" y="22">データソース</text>
+      <rect class="s-box" x="20" y="34" width="170" height="44" rx="5"/><text class="s-t" x="105" y="54" text-anchor="middle">AWS サービス</text><text class="s-tm" x="105" y="70" text-anchor="middle">EC2・ELB・RDS・Lambda…</text>
+      <rect class="s-box" x="20" y="92" width="170" height="44" rx="5"/><text class="s-t" x="105" y="112" text-anchor="middle">CloudWatch エージェント</text><text class="s-tm" x="105" y="128" text-anchor="middle">メモリ・ディスク・OS ログ</text>
+      <rect class="s-box" x="20" y="150" width="170" height="44" rx="5"/><text class="s-t" x="105" y="170" text-anchor="middle">アプリ／SDK</text><text class="s-tm" x="105" y="186" text-anchor="middle">PutMetricData・EMF</text>
+      <rect class="s-box" x="20" y="208" width="170" height="44" rx="5"/><text class="s-t" x="105" y="228" text-anchor="middle">CloudTrail・フローログ</text><text class="s-tm" x="105" y="244" text-anchor="middle">API 履歴・通信記録</text>
+
+      <text class="s-tm" x="270" y="22">CloudWatch</text>
+      <rect class="s-acc" x="270" y="44" width="180" height="70" rx="6"/><text class="s-tb" x="360" y="74" text-anchor="middle">メトリクス</text><text class="s-ts" x="360" y="94" text-anchor="middle">名前空間＋名前＋ディメンション</text>
+      <rect class="s-acc" x="270" y="170" width="180" height="70" rx="6"/><text class="s-tb" x="360" y="200" text-anchor="middle">Logs</text><text class="s-ts" x="360" y="220" text-anchor="middle">ロググループ／ストリーム</text>
+      <path class="s-la" d="M360 170 V122" marker-end="url(#a-cwflow-acc)"/>
+      <text class="s-ts" x="368" y="148">メトリクスフィルター</text>
+
+      <line class="s-l" x1="190" y1="56" x2="266" y2="70" marker-end="url(#a-cwflow)"/>
+      <line class="s-l" x1="190" y1="108" x2="266" y2="88" marker-end="url(#a-cwflow)"/>
+      <line class="s-l" x1="190" y1="122" x2="266" y2="190" marker-end="url(#a-cwflow)"/>
+      <line class="s-l" x1="190" y1="166" x2="266" y2="100" marker-end="url(#a-cwflow)"/>
+      <line class="s-l" x1="190" y1="230" x2="266" y2="214" marker-end="url(#a-cwflow)"/>
+
+      <rect class="s-box2" x="520" y="44" width="150" height="70" rx="6"/><text class="s-tb" x="595" y="74" text-anchor="middle">アラーム</text><text class="s-ts" x="595" y="94" text-anchor="middle">OK / ALARM / 不足</text>
+      <line class="s-l" x1="450" y1="79" x2="516" y2="79" marker-end="url(#a-cwflow)"/>
+      <text class="s-ts" x="483" y="70" text-anchor="middle">評価</text>
+
+      <rect class="s-box" x="520" y="170" width="150" height="70" rx="6"/><text class="s-tb" x="595" y="198" text-anchor="middle">サブスクリプション</text><text class="s-ts" x="595" y="218" text-anchor="middle">Lambda・Firehose 等</text>
+      <line class="s-l" x1="450" y1="205" x2="516" y2="205" marker-end="url(#a-cwflow)"/>
+      <text class="s-ts" x="483" y="196" text-anchor="middle">配信</text>
+
+      <text class="s-tm" x="740" y="22">アクション（直接）</text>
+      <rect class="s-box" x="740" y="34" width="140" height="28" rx="4"/><text class="s-t" x="810" y="53" text-anchor="middle">SNS 通知</text>
+      <rect class="s-box" x="740" y="68" width="140" height="28" rx="4"/><text class="s-t" x="810" y="87" text-anchor="middle">EC2 停止・復旧</text>
+      <rect class="s-box" x="740" y="102" width="140" height="28" rx="4"/><text class="s-t" x="810" y="121" text-anchor="middle">Auto Scaling</text>
+      <rect class="s-box" x="740" y="136" width="140" height="28" rx="4"/><text class="s-t" x="810" y="155" text-anchor="middle">Lambda・OpsItem</text>
+      <line class="s-l" x1="670" y1="70" x2="736" y2="48" marker-end="url(#a-cwflow)"/>
+      <line class="s-l" x1="670" y1="76" x2="736" y2="82" marker-end="url(#a-cwflow)"/>
+      <line class="s-l" x1="670" y1="84" x2="736" y2="116" marker-end="url(#a-cwflow)"/>
+      <line class="s-l" x1="670" y1="92" x2="736" y2="148" marker-end="url(#a-cwflow)"/>
+
+      <rect class="s-acc" x="520" y="290" width="150" height="56" rx="6"/><text class="s-tb" x="595" y="314" text-anchor="middle">EventBridge</text><text class="s-ts" x="595" y="332" text-anchor="middle">状態変化イベント</text>
+      <path class="s-la" d="M595 114 C 595 150, 700 200, 700 250 S 640 280, 640 286" marker-end="url(#a-cwflow-acc)"/>
+      <text class="s-ts" x="706" y="262">State Change</text>
+      <text class="s-tm" x="740" y="284">ターゲット（任意）</text>
+      <rect class="s-box" x="740" y="296" width="140" height="28" rx="4"/><text class="s-t" x="810" y="315" text-anchor="middle">SSM Automation</text>
+      <rect class="s-box" x="740" y="330" width="140" height="28" rx="4"/><text class="s-t" x="810" y="349" text-anchor="middle">Step Functions 等</text>
+      <line class="s-l" x1="670" y1="310" x2="736" y2="310" marker-end="url(#a-cwflow)"/>
+      <line class="s-l" x1="670" y1="326" x2="736" y2="342" marker-end="url(#a-cwflow)"/>
+      <path class="s-l s-dash" d="M190 240 C 330 300, 420 318, 516 318" marker-end="url(#a-cwflow)"/>
+      <text class="s-ts" x="200" y="350">AWS サービスのイベント（Health・EC2 状態変化など）</text>
+    </svg>
+    </div>
+    <figcaption><b>CloudWatch を中心にした観測と修復の流れ。</b>アラームは SNS・EC2 アクション・Auto Scaling・Lambda・Systems Manager を直接呼び出せます。それ以外の処理（Automation ランブック、Step Functions など）は、アラームの状態変化イベントを EventBridge で受けてターゲットに渡します。スキル 1.1.3 の「直接、または EventBridge を介して」はこの 2 経路のことです。</figcaption>
+  </figure>
+
+  <!-- ===== 1.1 Metrics ===== -->
+  <section class="sec" id="d1-metrics">
+    <h3>CloudWatch メトリクスの仕組み <span class="sk">1.1.1</span></h3>
+    <div class="prose">
+      <p>メトリクスは「<strong>名前空間</strong>（例 <code>AWS/EC2</code>）＋<strong>メトリクス名</strong>（例 <code>CPUUtilization</code>）＋<strong>ディメンション</strong>（例 <code>InstanceId=i-0abc</code>）」の組で一意になる時系列データです。ディメンションが 1 つでも違えば別のメトリクスとして扱われるため、アラームで「データが来ない」原因の多くはディメンションの指定ミスです。メトリクスは削除できず、保持期間が過ぎると自動的に消えます。</p>
+    </div>
+    <h4>保持期間とロールアップ</h4>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>データポイントの間隔</th><th>保持期間</th><th>補足</th></tr></thead>
+      <tbody>
+        <tr><td>60 秒未満（高解像度）</td><td>3 時間</td><td>カスタムメトリクスで <code>StorageResolution=1</code> を指定したもの。最短 1 秒</td></tr>
+        <tr><td>60 秒（1 分）</td><td>15 日</td><td>EC2 詳細モニタリング、多くの AWS サービス</td></tr>
+        <tr><td>300 秒（5 分）</td><td>63 日</td><td>EC2 基本モニタリングは 5 分間隔</td></tr>
+        <tr><td>3,600 秒（1 時間）</td><td>455 日（15 か月）</td><td>古いデータは自動的に粗い粒度へ集約される</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <h4>EC2 で「標準では取れない」メトリクス</h4>
+    <div class="grid2">
+      <div class="card"><span class="tag">標準メトリクス（ハイパーバイザー側で取得）</span><h5>AWS/EC2</h5><ul><li><code>CPUUtilization</code></li><li><code>NetworkIn/Out</code>、<code>NetworkPacketsIn/Out</code></li><li><code>EBSReadOps</code> などの EBS I/O（Nitro）</li><li><code>StatusCheckFailed_System</code> / <code>_Instance</code> / <code>_AttachedEBS</code></li><li><code>CPUCreditBalance</code>（T 系バースト）</li></ul></div>
+      <div class="card"><span class="tag">OS の内側にあるため CloudWatch エージェントが必要</span><h5>CWAgent 名前空間</h5><ul><li>メモリ使用率 <code>mem_used_percent</code></li><li>ディスク（ファイルシステム）使用率 <code>disk_used_percent</code></li><li>スワップ、プロセス数（procstat）</li><li>アプリのログファイル</li><li>Windows のパフォーマンスカウンター・イベントログ</li></ul></div>
+    </div>
+    <div class="callout trap mt">
+      <span class="lbl">ひっかけ注意</span>
+      <ul>
+        <li>「メモリ使用率でアラームを作りたい」→ 標準メトリクスには無いので、<strong>CloudWatch エージェントを入れてカスタムメトリクスとして送る</strong>のが正解です。逆に CPU 使用率のためにエージェントを入れる選択肢は不要な手間です。</li>
+        <li>EC2 の基本モニタリングは 5 分間隔です。1 分ごとに評価したいなら<strong>詳細モニタリング</strong>（有料）を有効化します。期間 1 分のアラームを基本モニタリングのメトリクスに設定すると、データ欠落扱いが増えます。</li>
+      </ul>
+    </div>
+    <h4>統計と高度な機能</h4>
+    <dl class="kv">
+      <dt>統計</dt><dd>Average・Sum・Minimum・Maximum・SampleCount・パーセンタイル（p90, p99 など）。レイテンシーは平均より p99 の方が利用者の体感に近い。</dd>
+      <dt>カスタムメトリクス</dt><dd><code>PutMetricData</code> API（または CLI <code>aws cloudwatch put-metric-data</code>）。ディメンションは最大 30。標準解像度（60 秒）か高解像度（1 秒）を選ぶ。</dd>
+      <dt>EMF</dt><dd>Embedded Metric Format。Lambda などで構造化 JSON ログを書くだけで、CloudWatch が自動的にメトリクスを抽出する。API 呼び出しを増やさずにカスタムメトリクスを出せる。</dd>
+      <dt>メトリクス数式</dt><dd>複数メトリクスの演算（例：<code>errors / requests * 100</code> でエラー率）。結果にアラームを設定できる。</dd>
+      <dt>異常検出</dt><dd>過去データから期待値の帯（バンド）を機械学習で作り、帯を外れたら ALARM。季節性のある指標で固定しきい値が使いにくいときに使う。</dd>
+      <dt>Metrics Insights</dt><dd>SQL 風のクエリで多数のメトリクスを集約（例：全インスタンスの CPU 上位 10）。クエリ結果にアラームを設定でき、インスタンスが増減しても追従する。</dd>
+    </dl>
+  </section>
+
+  <!-- ===== Alarms ===== -->
+  <section class="sec" id="d1-alarms">
+    <h3>アラームの評価と複合アラーム <span class="sk">1.1.3</span></h3>
+    <div class="prose">
+      <p>アラームは 3 つの状態（<code>OK</code>・<code>ALARM</code>・<code>INSUFFICIENT_DATA</code>）を持ち、<strong>状態が遷移したときにだけ</strong>アクションを実行します。ALARM のまま続いても通知は繰り返されません。評価のパラメータは「期間（Period）」「評価期間数（N）」「アラームを発生させるデータポイント数（M）」の 3 つで、直近 N 期間のうち M 個がしきい値を超えたら ALARM になります。</p>
+    </div>
+    <figure class="fig mt">
+      <div class="canvas">
+      <svg viewBox="0 0 700 240" role="img" aria-label="しきい値80%、評価期間5のうち3データポイントが超過したためALARMになる例">
+        <line class="s-grid" x1="60" y1="30" x2="660" y2="30"/>
+        <line class="s-grid" x1="60" y1="100" x2="660" y2="100"/>
+        <line class="s-axis" x1="60" y1="170" x2="660" y2="170"/>
+        <text class="s-tm" x="52" y="34" text-anchor="end">100%</text>
+        <text class="s-tm" x="52" y="104" text-anchor="end">50%</text>
+        <text class="s-tm" x="52" y="174" text-anchor="end">0%</text>
+        <rect x="240" y="22" width="300" height="156" rx="4" class="s-acc" style="fill-opacity:.35"/>
+        <text class="s-ts" x="390" y="16" text-anchor="middle">評価範囲：直近 N=5 期間</text>
+        <line class="s-lb s-dash" x1="60" y1="58" x2="660" y2="58"/>
+        <text class="s-ts" x="664" y="54" text-anchor="end">しきい値 80%</text>
+        <polyline class="s-l" points="90,114 150,93 210,55 270,51 330,86 390,47 450,43 510,107 570,48 630,128"/>
+        <circle class="f-acc" cx="90" cy="114" r="5"/><circle class="f-acc" cx="150" cy="93" r="5"/><circle class="f-bad" cx="210" cy="55" r="5"/>
+        <circle class="f-bad" cx="270" cy="51" r="6"/><circle class="f-acc" cx="330" cy="86" r="5"/><circle class="f-bad" cx="390" cy="47" r="6"/><circle class="f-bad" cx="450" cy="43" r="6"/><circle class="f-acc" cx="510" cy="107" r="5"/>
+        <circle class="f-bad" cx="570" cy="48" r="5"/><circle class="f-acc" cx="630" cy="128" r="5"/>
+        <text class="s-tm" x="90" y="190" text-anchor="middle">t1</text><text class="s-tm" x="150" y="190" text-anchor="middle">t2</text><text class="s-tm" x="210" y="190" text-anchor="middle">t3</text><text class="s-tm" x="270" y="190" text-anchor="middle">t4</text><text class="s-tm" x="330" y="190" text-anchor="middle">t5</text><text class="s-tm" x="390" y="190" text-anchor="middle">t6</text><text class="s-tm" x="450" y="190" text-anchor="middle">t7</text><text class="s-tm" x="510" y="190" text-anchor="middle">t8</text><text class="s-tm" x="570" y="190" text-anchor="middle">t9</text><text class="s-tm" x="630" y="190" text-anchor="middle">t10</text>
+        <text class="s-tb" x="390" y="216" text-anchor="middle">t4〜t8 のうち 3 点（t4・t6・t7）が超過 → M=3 を満たし ALARM</text>
+      </svg>
+      </div>
+      <figcaption><b>「M out of N」評価。</b>赤い点がしきい値超過のデータポイントです。M=N にすると「連続して超えたとき」だけ発火し、M&lt;N にすると一時的な揺らぎを許容しつつ検知できます。「平均 CPU 10% 未満が 30 分続いたら停止」なら、期間 5 分・N=6・M=6 か、期間 30 分・N=1・M=1 です。</figcaption>
+    </figure>
+
+    <h4>欠落データの扱い（TreatMissingData）</h4>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>設定</th><th>欠落データの解釈</th><th>向いている場面</th></tr></thead>
+      <tbody>
+        <tr><td><code>missing</code>（既定）</td><td>評価に使わない。範囲内が全部欠落なら INSUFFICIENT_DATA</td><td>一般的なメトリクス</td></tr>
+        <tr><td><code>notBreaching</code></td><td>正常（しきい値内）とみなす</td><td>エラー件数のように「発生しないとデータが出ない」メトリクス</td></tr>
+        <tr><td><code>breaching</code></td><td>超過とみなす</td><td>ハートビートのように「来ないこと自体が異常」なメトリクス</td></tr>
+        <tr><td><code>ignore</code></td><td>現在の状態を維持</td><td>状態をむやみに変えたくない場合</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h4>アラームが実行できるアクション</h4>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>アクション</th><th>メトリクスアラーム</th><th>複合アラーム</th><th>要点</th></tr></thead>
+      <tbody>
+        <tr><td>SNS 通知</td><td class="yes">○</td><td class="yes">○</td><td>メール・SMS・Lambda・SQS などへ配信</td></tr>
+        <tr><td>Lambda 関数の呼び出し</td><td class="yes">○</td><td class="yes">○</td><td>SNS を経由せず直接呼べる。関数側のリソースポリシーで CloudWatch を許可</td></tr>
+        <tr><td>EC2 アクション</td><td class="yes">○</td><td class="no">×</td><td>停止・終了・再起動・復旧。インスタンス単位のメトリクスのアラームに限る</td></tr>
+        <tr><td>Auto Scaling</td><td class="yes">○</td><td class="no">×</td><td>ステップ／シンプルスケーリングポリシーを実行</td></tr>
+        <tr><td>Systems Manager</td><td class="yes">○</td><td class="yes">○</td><td>OpsCenter の OpsItem 作成、インシデント作成</td></tr>
+        <tr><td>EventBridge 経由</td><td class="yes">○</td><td class="yes">○</td><td>状態変化イベントは常に既定のイベントバスへ送られる。設定不要で任意のターゲットへ</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h4>EC2 アクションの使い分け</h4>
+    <div class="grid2">
+      <div class="card"><span class="tag">StatusCheckFailed_System</span><h5>システムステータスチェック失敗 → 復旧（Recover）</h5><p>AWS 側のハードウェア・電源・ネットワークの問題。<strong>recover</strong> アクションで別の物理ホストへ移り、インスタンス ID・プライベート IP・Elastic IP・メタデータは維持されます（EBS ボリュームのみのインスタンスが対象）。手動なら<strong>停止→起動</strong>でもホストが変わります（再起動ではホストは変わらない）。</p></div>
+      <div class="card"><span class="tag">StatusCheckFailed_Instance</span><h5>インスタンスステータスチェック失敗 → 再起動（Reboot）</h5><p>OS 側の問題（カーネルパニック、メモリ枯渇、ファイルシステム破損、ネットワーク設定の誤り）。<strong>reboot</strong> アクションか、ログ確認・EC2Rescue による調査で対処します。</p></div>
+    </div>
+    <div class="callout tip mt">
+      <span class="lbl">試験の着眼点：アラームの EC2 アクション</span>
+      <ul>
+        <li>アイドル状態のインスタンスを自動停止してコスト削減 → <code>CPUUtilization</code> の Average にアラームを設定し、<strong>EC2 アクション「停止」</strong>。Run Command で CPU を取りに行く案、フローログから CPU を読む案は不可能です。</li>
+        <li>EC2 アクションの初回作成時、CloudWatch はサービスにリンクされたロール <code>AWSServiceRoleForCloudWatchEvents</code> を自動作成して停止などを代行します。</li>
+        <li>AWS 起因のハードウェア劣化・予定メンテナンスは CloudWatch ではなく <strong>AWS Health</strong> のイベントとして通知されます（<a href="#d1-ai">後述</a>）。</li>
+      </ul>
+    </div>
+
+    <h4>複合アラーム（Composite Alarm）</h4>
+    <div class="prose">
+      <p>複数のアラームの状態を <code>AND</code>・<code>OR</code>・<code>NOT</code> で組み合わせたルール式で判定します。例：<code>ALARM("cpu-high") AND ALARM("latency-high")</code>。CPU が高いだけ、レイテンシーが高いだけでは通知せず、両方そろったときだけ担当者を呼ぶ、という<strong>アラーム疲れの削減</strong>が主目的です。さらに「アクション抑制」を設定すると、メンテナンス用アラームが ALARM の間は通知を止められます。複合アラームは EC2 アクションと Auto Scaling アクションを持てない点に注意してください。</p>
+    </div>
+
+    <h4>アラームが期待どおり動かないときの調査順</h4>
+    <ol class="ladder">
+      <li><div><span class="q">INSUFFICIENT_DATA のまま</span><p class="a">名前空間・メトリクス名・ディメンションの一致を確認。期間がメトリクスの発行間隔より短くないか（5 分間隔のメトリクスに 1 分期間など）。エージェントやアプリが実際に送信しているか。</p></div></li>
+      <li><div><span class="q">ALARM になるのに通知が来ない</span><p class="a">SNS サブスクリプションが「確認済み」か。アラームのアクションが無効化（<code>disable-alarm-actions</code>）されていないか。SNS トピックが KMS で暗号化されている場合、キーポリシーで <code>cloudwatch.amazonaws.com</code> に <code>kms:Decrypt</code>・<code>kms:GenerateDataKey*</code> を許可しているか（AWS マネージドキー <code>aws/sns</code> ではこの許可を付けられないため、カスタマーマネージドキーが必要）。</p></div></li>
+      <li><div><span class="q">一度しか通知されない</span><p class="a">仕様です。アクションは状態遷移時のみ実行されます。繰り返し通知したいなら、EventBridge Scheduler などで別途仕組みを作ります。</p></div></li>
+      <li><div><span class="q">想定より早く／遅く発火する</span><p class="a">統計（Average と Maximum の取り違え）、M/N の設定、欠落データの扱いを見直します。</p></div></li>
+    </ol>
+  </section>
+
+  <!-- ===== Dashboards ===== -->
+  <section class="sec" id="d1-dash">
+    <h3>ダッシュボードとクロスアカウント監視 <span class="sk">1.1.4</span></h3>
+    <div class="prose">
+      <p>CloudWatch ダッシュボードは<strong>グローバルなリソース</strong>で、1 つのダッシュボードに複数リージョンのウィジェットを並べられます。複数アカウントのメトリクスを 1 か所で見るには、<strong>CloudWatch クロスアカウントオブザーバビリティ</strong>を設定します。</p>
+    </div>
+    <div class="grid2 mt">
+      <div class="card"><span class="tag">推奨</span><h5>クロスアカウントオブザーバビリティ</h5><p>「モニタリングアカウント」にシンク（sink）を作り、各「ソースアカウント」からリンクを張ります。メトリクス・ログ・トレース・Application Signals を共有でき、Organizations の OU 単位でまとめて設定できます。モニタリングアカウント側でダッシュボードやアラームを作れば全アカウント横断になります。</p></div>
+      <div class="card"><span class="tag">従来方式</span><h5>クロスアカウント・クロスリージョンのコンソール</h5><p>共有元アカウントに <code>CloudWatch-CrossAccountSharingRole</code> を作り、閲覧側のコンソールでアカウントを切り替えて表示します。ダッシュボード上でアカウント ID を指定したウィジェットも作れます。</p></div>
+    </div>
+    <dl class="kv mt">
+      <dt>共有</dt><dd>ダッシュボードは「公開（リンクを知る誰でも）」「指定したメールアドレス（ログインが必要）」「SSO プロバイダー経由」の 3 通りで共有できます。AWS アカウントを持たない関係者にも見せられます。</dd>
+      <dt>変数</dt><dd>ダッシュボード変数を使うと、インスタンス ID などをドロップダウンで切り替えて 1 つのダッシュボードを使い回せます。</dd>
+      <dt>IaC 化</dt><dd><code>AWS::CloudWatch::Dashboard</code> の <code>DashboardBody</code>（JSON）でテンプレート化できます。アカウントごとに同じダッシュボードを配るなら StackSets を使います。</dd>
+      <dt>自動ダッシュボード</dt><dd>サービスごとの推奨メトリクスを並べたダッシュボードが自動で用意されています。カスタムの出発点として便利です。</dd>
+    </dl>
+    <div class="callout lab mt">
+      <span class="lbl">ハンズオン（リポジトリ Week 1）</span>
+      <p>ToDo アプリの Lambda に対し、<code>Errors</code>・<code>Duration</code> p99・<code>Throttles</code> を並べたダッシュボードと、<code>Errors</code> の合計が 5 分で 1 以上になったら SNS へ通知するアラームを CloudFormation で作成します。作業後は <code>aws cloudformation delete-stack --stack-name wk1-monitoring</code> で削除してください。</p>
+    </div>
+  </section>
+
+  <!-- ===== Logs ===== -->
+  <section class="sec" id="d1-logs">
+    <h3>CloudWatch Logs：フィルター・集約・分析 <span class="sk">1.1.1</span></h3>
+    <div class="prose">
+      <p>ログは「ロググループ」（アプリや用途の単位）と「ログストリーム」（インスタンスやコンテナなど送信元の単位）の 2 階層で保存されます。保持期間はロググループごとに設定し、<strong>既定は「失効しない」</strong>なのでコストが膨らみがちです。1 日〜10 年の範囲で必ず設定します。</p>
+    </div>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>機能</th><th>何をするか</th><th>試験で問われる要点</th></tr></thead>
+      <tbody>
+        <tr><td>メトリクスフィルター</td><td>ログの文字列パターン（例 <code>ERROR</code>、JSON の <code>{ $.status = 500 }</code>）に一致した件数や値をメトリクス化</td><td><strong>作成後に届いたログにだけ適用</strong>（過去ログは遡らない）。アラームと組み合わせて「エラーが 5 分で 10 件以上」を検知。</td></tr>
+        <tr><td>サブスクリプションフィルター</td><td>一致したログをリアルタイムに Lambda・Kinesis Data Streams・Data Firehose・OpenSearch Service へ配信</td><td>1 ロググループに最大 2 つ。別アカウントへは「送信先（Destination）」を介して配信。リアルタイムの集約・転送に使う。</td></tr>
+        <tr><td>Logs Insights</td><td>専用クエリ言語で対話的に検索・集計</td><td>過去ログのアドホック分析。メトリクスフィルターと違い遡って調べられる。</td></tr>
+        <tr><td>Live Tail</td><td>ログをリアルタイムにストリーミング表示</td><td>デプロイ直後の動作確認、障害対応中の監視。</td></tr>
+        <tr><td>S3 へのエクスポート</td><td><code>CreateExportTask</code> でバッチ出力</td><td>リアルタイムではない（完了まで時間がかかる）。継続的に S3 へ送るなら Firehose へのサブスクリプション。</td></tr>
+        <tr><td>Contributor Insights</td><td>ログから「上位の寄与者」（IP、URL など）をランキング</td><td>特定 IP からの大量アクセス、エラーを多く出すリソースの特定。</td></tr>
+        <tr><td>データ保護ポリシー</td><td>ログ中の個人情報・認証情報を自動検出してマスク</td><td>機微データがログに残る問題への対処。閲覧には特別な権限が必要。</td></tr>
+        <tr><td>KMS 暗号化</td><td>ロググループをカスタマーマネージドキーで暗号化</td><td>キーポリシーで <code>logs.&lt;region&gt;.amazonaws.com</code> を許可しないと関連付けに失敗する。</td></tr>
+        <tr><td>ログクラス</td><td>Standard と Infrequent Access</td><td>IA は取り込み単価が安いが、サブスクリプションやメトリクスフィルターなど一部機能が使えない。</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <h4>Logs Insights クエリの例</h4>
+<pre><code># 直近のエラーを 5 分ごとに集計
+fields @timestamp, @message
+| filter @message like /ERROR/
+| stats count(*) as errors by bin(5m)
+| sort errors desc
+
+# Lambda の遅い呼び出し上位 10 件（REPORT 行から抽出）
+filter @type = "REPORT"
+| fields @requestId, @duration, @maxMemoryUsed
+| sort @duration desc
+| limit 10</code></pre>
+    <div class="callout tip mt">
+      <span class="lbl">試験の着眼点：どの機能を選ぶか</span>
+      <ul>
+        <li>「特定のエラーが一定数を超えたら通知」→ <strong>メトリクスフィルター＋アラーム＋SNS</strong>。</li>
+        <li>「複数アカウントのログを中央のアカウントにほぼリアルタイムで集約」→ <strong>サブスクリプションフィルター＋送信先（Kinesis／Firehose）</strong>、または CloudWatch のクロスアカウント機能。</li>
+        <li>「過去 1 週間のログから原因を調べたい」→ <strong>Logs Insights</strong>（メトリクスフィルターは遡れない）。</li>
+        <li>「長期保管を安く」→ Firehose 経由で S3 に送り、S3 ライフサイクルで Glacier へ。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== Agent ===== -->
+  <section class="sec" id="d1-agent">
+    <h3>CloudWatch エージェント（EC2・ECS・EKS） <span class="sk">1.1.2</span></h3>
+    <div class="prose">
+      <p>エージェントは「<strong>インストールしただけでは何も送らない</strong>」点が最大の要点です。何を集めてどこへ送るかを書いた設定ファイル（JSON）を作り、その設定を読み込ませて起動する必要があります。</p>
+    </div>
+    <ol class="ladder mt" aria-label="EC2へのエージェント導入手順">
+      <li><div><span class="q">IAM ロールを付ける</span><p class="a">インスタンスプロファイルに <code>CloudWatchAgentServerPolicy</code>（メトリクスとログの書き込み）を付与。Systems Manager で管理するなら <code>AmazonSSMManagedInstanceCore</code> も。設定を Parameter Store に保存する管理用インスタンスには <code>CloudWatchAgentAdminPolicy</code>。</p></div></li>
+      <li><div><span class="q">インストールする</span><p class="a">Systems Manager Run Command の <code>AWS-ConfigureAWSPackage</code>（パッケージ名 <code>AmazonCloudWatchAgent</code>）で一括導入するのが運用的。パッケージマネージャーでも可。</p></div></li>
+      <li><div><span class="q">設定ファイルを作る</span><p class="a">ウィザード <code>amazon-cloudwatch-agent-config-wizard</code> か手書き。<strong>Parameter Store（例 <code>AmazonCloudWatch-linux</code>）に保存</strong>すると全インスタンスで同じ設定を共有できる。</p></div></li>
+      <li><div><span class="q">設定を読み込んで起動する</span><p class="a"><code>amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c ssm:AmazonCloudWatch-linux</code>（ローカルファイルなら <code>-c file:/path/config.json</code>）。Run Command の <code>AmazonCloudWatch-ManageAgent</code> でも実行可能。</p></div></li>
+      <li><div><span class="q">設定を維持する</span><p class="a">State Manager の関連付け（Association）で定期的に再適用すると、新しく起動したインスタンスにも自動で反映される。</p></div></li>
+    </ol>
+    <h4>設定ファイルの骨格</h4>
+<pre><code>{
+  "agent": { "metrics_collection_interval": 60 },
+  "metrics": {
+    "namespace": "CWAgent",
+    "append_dimensions": { "InstanceId": "${aws:InstanceId}", "AutoScalingGroupName": "${aws:AutoScalingGroupName}" },
+    "aggregation_dimensions": [["AutoScalingGroupName"]],
+    "metrics_collected": {
+      "mem":  { "measurement": ["mem_used_percent"] },
+      "disk": { "measurement": ["used_percent"], "resources": ["/"] },
+      "procstat": [{ "exe": "nginx", "measurement": ["pid_count"] }]
+    }
+  },
+  "logs": {
+    "logs_collected": { "files": { "collect_list": [
+      { "file_path": "/var/log/app/app.log", "log_group_name": "/todo/app",
+        "log_stream_name": "{instance_id}", "retention_in_days": 30 }
+    ]}}
+  }
+}</code></pre>
+    <div class="grid2 mt">
+      <div class="card"><span class="tag">Amazon ECS</span><h5>Container Insights（ECS）</h5><p>クラスター設定（またはアカウント設定 <code>containerInsights</code>）で有効化すると、クラスター・サービス・タスク単位の CPU・メモリ・ネットワークが自動収集されます。拡張オブザーバビリティ（enhanced）ではコンテナ単位まで。EC2 起動タイプでインスタンスレベルの情報も取るなら、エージェントをデーモンサービスとして配置します。アプリログは <code>awslogs</code> ログドライバーか FireLens（Fluent Bit）で送ります。</p></div>
+      <div class="card"><span class="tag">Amazon EKS</span><h5>CloudWatch Observability アドオン</h5><p>EKS アドオンとして入れると、CloudWatch エージェントと Fluent Bit が DaemonSet で全ノードに配置され、Container Insights（ノード・Pod・コンテナのメトリクス）とコンテナログが収集されます。権限は IRSA または EKS Pod Identity でサービスアカウントに付与します。Prometheus 形式のメトリクスはエージェントでスクレイプするか Managed Prometheus へ送ります。</p></div>
+    </div>
+    <div class="callout pdf mt">
+      <span class="lbl">演習 PDF の論点（問題 19）</span>
+      <p>「エージェントを入れたのにログが来ない」→ 設定ファイルを作成し、<code>fetch-config</code> で読み込ませて起動するのが正解。「CloudWatch のメトリクス設定画面で OS メトリクスを有効化」「CloudWatch アップローダー」といった存在しない機能の選択肢に注意します。</p>
+    </div>
+  </section>
+
+  <!-- ===== CloudTrail ===== -->
+  <section class="sec" id="d1-trail">
+    <h3>AWS CloudTrail：API の監査証跡 <span class="sk">1.1.1</span> <span class="sk">4.1.2</span></h3>
+    <div class="prose">
+      <p>CloudTrail は「<strong>誰が・いつ・どこから・どの API を呼び、成功したか</strong>」を記録します。設定変更の「中身」を追う AWS Config とは役割が違う点を最初に区別してください。</p>
+    </div>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>イベントの種類</th><th>内容</th><th>既定の扱い</th></tr></thead>
+      <tbody>
+        <tr><td>管理イベント</td><td>リソースの作成・変更・削除などコントロールプレーンの操作（<code>RunInstances</code>、<code>CreateBucket</code> など）。読み取り／書き込みで分けられる</td><td>イベント履歴で <strong>90 日間</strong>無料で閲覧可能（証跡がなくても）</td></tr>
+        <tr><td>データイベント</td><td>リソース内部の大量操作（S3 の <code>GetObject</code>/<code>PutObject</code>、Lambda の <code>Invoke</code>、DynamoDB の項目操作など）</td><td>記録されない。証跡またはイベントデータストアで明示的に有効化（追加料金）</td></tr>
+        <tr><td>Insights イベント</td><td>書き込み API の呼び出し回数やエラー率の異常な増加を検知</td><td>無効。証跡で有効化</td></tr>
+        <tr><td>ネットワークアクティビティイベント</td><td>VPC エンドポイント経由の API 呼び出し（拒否されたものを含む）</td><td>無効。データ境界の監査に使う</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <dl class="kv mt">
+      <dt>証跡（Trail）</dt><dd>イベントを S3 バケット（任意で CloudWatch Logs にも）へ継続的に配信します。<strong>全リージョン対象</strong>にするのが推奨。Organizations の管理アカウントから<strong>組織の証跡</strong>を作ると全メンバーアカウントを一括記録でき、メンバー側では削除できません。</dd>
+      <dt>ログファイルの整合性検証</dt><dd>有効化すると 1 時間ごとに SHA-256 のダイジェストファイルが作られ、<code>aws cloudtrail validate-logs</code> でログの改ざん・削除を検出できます。監査要件では必須。</dd>
+      <dt>暗号化</dt><dd>既定は SSE-S3。SSE-KMS にする場合はキーポリシーで CloudTrail に暗号化を許可します。</dd>
+      <dt>CloudWatch Logs 連携</dt><dd>証跡を CloudWatch Logs に送り、メトリクスフィルター＋アラームで「ルートユーザーのログイン」「セキュリティグループの変更」「認可失敗の多発」などを検知します（CIS ベンチマークの定番）。</dd>
+      <dt>CloudTrail Lake</dt><dd>イベントをイベントデータストアに取り込み、SQL で長期間のイベントを横断検索できるマネージドなデータレイク。</dd>
+      <dt>配信遅延</dt><dd>API 呼び出しから S3 へのログ配信は通常 5 分程度（保証ではない）。即時の自動対応は EventBridge で受けます。</dd>
+    </dl>
+    <div class="callout trap mt">
+      <span class="lbl">ひっかけ注意</span>
+      <ul>
+        <li>「誰がセキュリティグループを変更したか」→ CloudTrail。「セキュリティグループのルールが過去どう変わってきたか、ポリシーに準拠しているか」→ Config。</li>
+        <li>EventBridge で <code>AWS API Call via CloudTrail</code> 型のイベントを受けるには、<strong>CloudTrail の証跡が有効</strong>でなければなりません。</li>
+        <li>S3 のオブジェクト単位のアクセス（誰がファイルを読んだか）はデータイベントを有効化しないと残りません。S3 サーバーアクセスログという別の仕組みもあります。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== Observability ===== -->
+  <section class="sec" id="d1-obs">
+    <h3>Managed Prometheus・Grafana・X-Ray・AI ワークロードの監視 <span class="sk">1.1.1</span></h3>
+    <div class="grid2">
+      <div class="card"><span class="tag">メトリクス（オープンソース互換）</span><h5>Amazon Managed Service for Prometheus</h5><p>Prometheus 互換のマネージドな時系列データベース。EKS や自前の Prometheus から <strong>remote write</strong> で送るか、エージェントレスのマネージドコレクターで EKS をスクレイプします。クエリは PromQL、アラートはルールとアラートマネージャーで定義。Kubernetes のメトリクスを長期保存・高可用にしたいときの選択肢です。</p></div>
+      <div class="card"><span class="tag">可視化</span><h5>Amazon Managed Grafana</h5><p>マネージドな Grafana ワークスペース。CloudWatch・Managed Prometheus・X-Ray・Athena などをデータソースにでき、認証は IAM Identity Center や SAML。複数アカウント・複数ツールのデータを 1 つの画面にまとめたいときに使います。</p></div>
+      <div class="card"><span class="tag">分散トレーシング</span><h5>AWS X-Ray</h5><p>リクエストがサービス間をどう流れ、どこで時間がかかったかを記録します。サービスマップでボトルネックやエラーの発生箇所を特定。<strong>アノテーション</strong>（インデックスされ検索・フィルターに使える）と<strong>メタデータ</strong>（検索不可の付加情報）の違い、サンプリングルール（全件ではなく一定割合を記録）が頻出です。新規の計装は AWS Distro for OpenTelemetry（ADOT）による OpenTelemetry 方式が推奨。Lambda はトレースを有効化するだけでセグメントが出ます。</p></div>
+      <div class="card"><span class="tag">アプリ性能の自動計測</span><h5>Application Signals・Synthetics・RUM</h5><p>Application Signals は標準的なアプリのメトリクス（レイテンシー・エラー・可用性）と SLO を自動で作ります。Synthetics の Canary は外形監視（定期的に URL や API を叩く）、RUM は実ユーザーのブラウザ側の体験を計測します。</p></div>
+    </div>
+    <h4>サーバーレスとコンテナで見るべきメトリクス</h4>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>対象</th><th>主なメトリクス</th><th>読み方</th></tr></thead>
+      <tbody>
+        <tr><td>Lambda</td><td><code>Invocations</code>・<code>Errors</code>・<code>Throttles</code>・<code>Duration</code>・<code>ConcurrentExecutions</code>・<code>IteratorAge</code></td><td>Throttles が出たら同時実行数の上限（予約同時実行・アカウントクォータ）を確認。IteratorAge の増加はストリーム処理の遅れ。ログは <code>/aws/lambda/関数名</code>。Lambda Insights 拡張でメモリや CPU も取得。</td></tr>
+        <tr><td>ECS</td><td>サービスの <code>CPUUtilization</code>・<code>MemoryUtilization</code>、Container Insights の <code>RunningTaskCount</code></td><td>タスクの停止理由（<code>stoppedReason</code>）は ECS コンソールやイベントで確認。OOM はメモリ上限の見直し。</td></tr>
+        <tr><td>API Gateway</td><td><code>Count</code>・<code>4XXError</code>・<code>5XXError</code>・<code>Latency</code>・<code>IntegrationLatency</code></td><td>Latency − IntegrationLatency が API Gateway 自体のオーバーヘッド。</td></tr>
+        <tr><td>Amazon Bedrock（AI）</td><td><code>Invocations</code>・<code>InvocationLatency</code>・<code>InvocationThrottles</code>・<code>InvocationClientErrors</code>／<code>ServerErrors</code>・<code>InputTokenCount</code>・<code>OutputTokenCount</code></td><td>スロットリングはクォータ超過のサイン（再試行とバックオフ、クォータ引き上げ、クロスリージョン推論の検討）。トークン数はコストに直結。</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout new mt">
+      <span class="lbl">v1.1 追加：AI ワークロードの監視</span>
+      <ul>
+        <li>Bedrock の<strong>モデル呼び出しログ</strong>は既定で無効です。有効化すると、入力プロンプトと出力を CloudWatch Logs や S3 に保存できます（機微情報を含むため、保存先の暗号化とアクセス制御もセットで考えます）。</li>
+        <li>Bedrock の API 呼び出し自体（誰がどのモデルを呼んだか）は CloudTrail に記録されます。</li>
+        <li>ガードレールの介入回数などもメトリクスとして確認できます。AI ワークロードも「メトリクス・ログ・証跡」の 3 点で監視するという原則は他のワークロードと同じです。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== SNS ===== -->
+  <section class="sec" id="d1-sns">
+    <h3>Amazon SNS による通知 <span class="sk">1.1.5</span></h3>
+    <div class="prose">
+      <p>SNS はトピックに発行されたメッセージを、購読（サブスクリプション）している全員に配信する Pub/Sub サービスです。CloudWatch アラーム、S3 イベント通知、EventBridge、AWS Backup、Config、CloudFormation のスタックイベントなど多くのサービスが SNS へ通知できます。</p>
+    </div>
+    <dl class="kv mt">
+      <dt>プロトコル</dt><dd>Email／Email-JSON、HTTP/HTTPS、SQS、Lambda、SMS、モバイルプッシュ、Data Firehose。メールと HTTP は<strong>購読の確認</strong>が完了するまで配信されません。</dd>
+      <dt>アクセスポリシー</dt><dd>他サービスがトピックに発行するには、トピックのリソースポリシーでそのサービスプリンシパル（例 <code>s3.amazonaws.com</code>、<code>events.amazonaws.com</code>）に <code>sns:Publish</code> を許可します。<code>aws:SourceArn</code>・<code>aws:SourceAccount</code> 条件で送信元を絞るのが安全。</dd>
+      <dt>暗号化</dt><dd>SSE を有効にしたトピックへ AWS サービスが発行するには、カスタマーマネージドキーのキーポリシーでそのサービスに <code>kms:GenerateDataKey*</code> と <code>kms:Decrypt</code> を許可します。</dd>
+      <dt>フィルターポリシー</dt><dd>サブスクリプションごとに、メッセージ属性や本文の内容で受け取るメッセージを絞れます。1 トピックを用途別に使い分けられる。</dd>
+      <dt>ファンアウト</dt><dd>1 つのトピックに複数の SQS キューを購読させ、同じイベントを並行処理する定番パターン。</dd>
+      <dt>配信失敗</dt><dd>サブスクリプションに SQS のデッドレターキューを設定可能。配信ステータスのログを CloudWatch Logs に出して原因を調べられます。</dd>
+      <dt>FIFO トピック</dt><dd>順序と重複排除が必要な場合。購読先は SQS（FIFO／標準）など一部に限られます。</dd>
+    </dl>
+    <div class="callout tip mt">
+      <span class="lbl">試験の着眼点</span>
+      <p>「アラームは ALARM になっているのに通知メールが届かない」→ 購読確認の未完了か、暗号化キーのポリシー不足。「S3 にオブジェクトが置かれたら運用チームへメール」→ S3 イベント通知 → SNS（トピックポリシーで S3 を許可）。</p>
+    </div>
+  </section>
+
+  <!-- ===== EventBridge ===== -->
+  <section class="sec" id="d1-eb">
+    <h3>Amazon EventBridge：送信・エンリッチ・配信 <span class="sk">1.2.2</span> <span class="sk">3.2.2</span></h3>
+    <div class="prose">
+      <p>EventBridge は「イベントバス」に届いたイベントを「ルール」のパターンで判定し、一致したものを「ターゲット」へ配信するサーバーレスのイベントルーターです。AWS サービスのイベント（EC2 の状態変化、Health、GuardDuty の検出結果、CloudWatch アラームの状態変化など）は、そのイベントが起きたリージョンの<strong>既定のイベントバス</strong>へ自動で届きます。</p>
+    </div>
+    <figure class="fig mt">
+      <div class="canvas">
+      <svg viewBox="0 0 900 300" role="img" aria-label="イベントソースからイベントバス、ルールのパターン一致、入力トランスフォーマーを経てターゲットへ。失敗時は再試行の後にデッドレターキューへ">
+        <defs><marker id="a-eb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker>
+        <marker id="a-eb-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-hb" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <text class="s-tm" x="20" y="24">送信（ソース）</text>
+        <rect class="s-box" x="20" y="36" width="150" height="34" rx="4"/><text class="s-t" x="95" y="58" text-anchor="middle">AWS サービス</text>
+        <rect class="s-box" x="20" y="80" width="150" height="34" rx="4"/><text class="s-t" x="95" y="102" text-anchor="middle">PutEvents（自作）</text>
+        <rect class="s-box" x="20" y="124" width="150" height="34" rx="4"/><text class="s-t" x="95" y="146" text-anchor="middle">SaaS パートナー</text>
+        <rect class="s-box" x="20" y="168" width="150" height="34" rx="4"/><text class="s-t" x="95" y="190" text-anchor="middle">Scheduler</text>
+        <rect class="s-acc" x="220" y="60" width="130" height="120" rx="6"/><text class="s-tb" x="285" y="112" text-anchor="middle">イベントバス</text><text class="s-ts" x="285" y="132" text-anchor="middle">既定／カスタム</text>
+        <line class="s-l" x1="170" y1="53" x2="216" y2="90" marker-end="url(#a-eb)"/>
+        <line class="s-l" x1="170" y1="97" x2="216" y2="110" marker-end="url(#a-eb)"/>
+        <line class="s-l" x1="170" y1="141" x2="216" y2="130" marker-end="url(#a-eb)"/>
+        <line class="s-l" x1="170" y1="185" x2="216" y2="150" marker-end="url(#a-eb)"/>
+        <rect class="s-box2" x="400" y="60" width="140" height="120" rx="6"/><text class="s-tb" x="470" y="96" text-anchor="middle">ルール</text><text class="s-ts" x="470" y="118" text-anchor="middle">イベントパターン</text><text class="s-ts" x="470" y="136" text-anchor="middle">で一致判定</text><text class="s-tm" x="470" y="160" text-anchor="middle">1 ルール 5 ターゲット</text>
+        <line class="s-l" x1="350" y1="120" x2="396" y2="120" marker-end="url(#a-eb)"/>
+        <rect class="s-box" x="590" y="88" width="120" height="64" rx="6"/><text class="s-tb" x="650" y="114" text-anchor="middle">入力変換</text><text class="s-ts" x="650" y="134" text-anchor="middle">エンリッチ</text>
+        <line class="s-l" x1="540" y1="120" x2="586" y2="120" marker-end="url(#a-eb)"/>
+        <text class="s-ts" x="563" y="110" text-anchor="middle">一致</text>
+        <text class="s-tm" x="760" y="24">配信（ターゲット）</text>
+        <rect class="s-box" x="760" y="36" width="125" height="30" rx="4"/><text class="s-t" x="822" y="56" text-anchor="middle">Lambda</text>
+        <rect class="s-box" x="760" y="72" width="125" height="30" rx="4"/><text class="s-t" x="822" y="92" text-anchor="middle">SSM Automation</text>
+        <rect class="s-box" x="760" y="108" width="125" height="30" rx="4"/><text class="s-t" x="822" y="128" text-anchor="middle">SNS／SQS</text>
+        <rect class="s-box" x="760" y="144" width="125" height="30" rx="4"/><text class="s-t" x="822" y="164" text-anchor="middle">Step Functions</text>
+        <rect class="s-box" x="760" y="180" width="125" height="30" rx="4"/><text class="s-t" x="822" y="200" text-anchor="middle">別アカウントのバス</text>
+        <line class="s-l" x1="710" y1="110" x2="756" y2="51" marker-end="url(#a-eb)"/>
+        <line class="s-l" x1="710" y1="115" x2="756" y2="87" marker-end="url(#a-eb)"/>
+        <line class="s-l" x1="710" y1="120" x2="756" y2="123" marker-end="url(#a-eb)"/>
+        <line class="s-l" x1="710" y1="125" x2="756" y2="159" marker-end="url(#a-eb)"/>
+        <line class="s-l" x1="710" y1="130" x2="756" y2="195" marker-end="url(#a-eb)"/>
+        <rect class="s-bad" x="590" y="236" width="170" height="44" rx="6"/><text class="s-tb" x="675" y="256" text-anchor="middle">DLQ（SQS）</text><text class="s-ts" x="675" y="272" text-anchor="middle">再試行が尽きたイベント</text>
+        <path class="s-lb s-dash" d="M822 210 V258 H764" marker-end="url(#a-eb-b)"/>
+        <text class="s-ts" x="814" y="228" text-anchor="end">配信失敗 → 最大 24 時間・185 回まで再試行</text>
+        <rect class="s-box" x="220" y="236" width="170" height="44" rx="6"/><text class="s-tb" x="305" y="256" text-anchor="middle">アーカイブ</text><text class="s-ts" x="305" y="272" text-anchor="middle">後から再生（Replay）</text>
+        <line class="s-l s-dash" x1="285" y1="180" x2="285" y2="232" marker-end="url(#a-eb)"/>
+      </svg>
+      </div>
+      <figcaption><b>EventBridge の処理の流れ。</b>スキル 1.2.2 の「送信・エンリッチ・配信」はそれぞれ、ソースから PutEvents でバスに送る、入力トランスフォーマーや Pipes のエンリッチで情報を加工・追加する、ターゲットへ届ける（失敗は再試行と DLQ）に対応します。</figcaption>
+    </figure>
+    <h4>イベントパターンの書き方</h4>
+<pre><code>{
+  "source": ["aws.ec2"],
+  "detail-type": ["EC2 Instance State-change Notification"],
+  "detail": {
+    "state": ["stopped", "terminated"],
+    "instance-id": [{ "prefix": "i-0" }]
+  }
+}</code></pre>
+    <div class="prose mt">
+      <p>パターンは<strong>完全一致・大文字小文字を区別</strong>し、値は必ず配列で書きます。<code>prefix</code>・<code>suffix</code>・<code>anything-but</code>・<code>numeric</code>・<code>exists</code>・<code>wildcard</code>・<code>equals-ignore-case</code> などの演算子があります。パターンに書いていないフィールドは何でも一致します。</p>
+    </div>
+    <h4>関連機能</h4>
+    <dl class="kv">
+      <dt>入力トランスフォーマー</dt><dd>イベントから必要なフィールドだけを抜き出し（入力パス）、テンプレートに埋め込んでターゲットに渡す。通知文面の整形などに使う。</dd>
+      <dt>EventBridge Pipes</dt><dd>SQS・Kinesis・DynamoDB Streams などのソースから 1 対 1 でターゲットへつなぐ。途中に<strong>フィルター</strong>と<strong>エンリッチメント</strong>（Lambda・Step Functions・API Gateway・API 送信先で情報を付け足す）を挟める。</dd>
+      <dt>EventBridge Scheduler</dt><dd>cron／rate／1 回限りのスケジュールで多数の AWS API を直接呼び出せる。タイムゾーン指定、柔軟な実行時間帯に対応。従来の「スケジュール式のルール」の後継。</dd>
+      <dt>API 送信先</dt><dd>外部の HTTP エンドポイント（チャットツール、チケットシステムなど）を認証情報つきで呼び出すターゲット。</dd>
+      <dt>アーカイブと再生</dt><dd>バスのイベントを保存し、障害復旧後に再生してターゲットに処理させ直せる。</dd>
+      <dt>クロスアカウント</dt><dd>送信先アカウントのイベントバスにリソースポリシーで <code>events:PutEvents</code> を許可し、送信元のルールのターゲットにそのバスを指定。組織全体のセキュリティイベントを集約する定番構成。</dd>
+    </dl>
+    <h4>ルールが発火しない・ターゲットが動かないときの調査</h4>
+    <ol class="ladder">
+      <li><div><span class="q">ルールは有効か、正しいバス・リージョンか</span><p class="a">AWS サービスのイベントは発生リージョンの既定バスに届きます。カスタムバスにルールを作っても AWS のイベントは来ません。IAM など一部グローバルサービスの API イベントは us-east-1 に届きます。</p></div></li>
+      <li><div><span class="q">パターンが実際のイベントと一致しているか</span><p class="a">コンソールの「イベントパターンをテスト」やサンドボックスで、実際のイベント JSON と照合。大文字小文字、配列で書いているか、数値と文字列の型の違い。</p></div></li>
+      <li><div><span class="q">メトリクスで段階を切り分ける</span><p class="a"><code>MatchedEvents</code>（一致したか）→ <code>Invocations</code>（呼び出したか）→ <code>FailedInvocations</code>（失敗したか）→ <code>InvocationsSentToDlq</code>。</p></div></li>
+      <li><div><span class="q">ターゲット側の権限</span><p class="a">Lambda・SNS・SQS はターゲット側のリソースポリシーで <code>events.amazonaws.com</code> を許可。Step Functions・SSM Automation・Kinesis・ECS タスクなどは EventBridge が引き受ける IAM ロールが必要。暗号化された SQS／SNS はキーポリシーも確認。</p></div></li>
+      <li><div><span class="q">入力の形</span><p class="a">入力トランスフォーマーの出力がターゲットの期待する形式か（JSON として不正だと失敗）。</p></div></li>
+    </ol>
+  </section>
+
+  <!-- ===== Remediation automation ===== -->
+  <section class="sec" id="d1-auto">
+    <h3>修復の自動化と Systems Manager Automation <span class="sk">1.2.1</span> <span class="sk">1.2.3</span></h3>
+    <div class="prose">
+      <p>修復の自動化は「<strong>何が検知するか（トリガー）</strong>」「<strong>どう届けるか（ルーティング）</strong>」「<strong>何が直すか（アクション）</strong>」の 3 段に分けて考えると選択肢を整理できます。</p>
+    </div>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>トリガー</th><th>ルーティング</th><th>アクション</th><th>典型例</th></tr></thead>
+      <tbody>
+        <tr><td>CloudWatch アラーム</td><td>アラームアクション（直接）</td><td>EC2 停止／復旧、Auto Scaling、SNS、Lambda</td><td>アイドルインスタンスの停止、システムステータス失敗時の復旧</td></tr>
+        <tr><td>CloudWatch アラーム</td><td>EventBridge（状態変化イベント）</td><td>SSM Automation、Step Functions</td><td>ディスク逼迫時にログ削除ランブックを実行</td></tr>
+        <tr><td>AWS Config ルール（非準拠）</td><td>Config の修復アクション</td><td>SSM Automation（<code>AWSConfigRemediation-*</code> など）</td><td>暗号化されていない S3 バケットに既定の暗号化を設定</td></tr>
+        <tr><td>AWS Health イベント</td><td>EventBridge</td><td>Lambda、SSM Automation</td><td>リタイア予定の EC2 を自動で停止→起動</td></tr>
+        <tr><td>GuardDuty／Security Hub 検出結果</td><td>EventBridge</td><td>Lambda、SSM Automation</td><td>侵害が疑われるインスタンスの隔離</td></tr>
+        <tr><td>CloudTrail の API 呼び出し</td><td>EventBridge（証跡が必要）</td><td>Lambda</td><td>0.0.0.0/0 に SSH を開けたルールを自動で取り消し</td></tr>
+        <tr><td>スケジュール</td><td>EventBridge Scheduler、メンテナンスウィンドウ</td><td>SSM Automation、Run Command</td><td>夜間に開発環境のインスタンスを停止</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h4>Automation ランブックの構造</h4>
+    <div class="prose">
+      <p>Automation ランブック（ドキュメントタイプ <code>Automation</code>、<code>schemaVersion: '0.3'</code>）は、ステップの並びで AWS API を呼び出す手順書です。事前定義済みのランブックは接頭辞で提供元が分かります。</p>
+    </div>
+    <div class="grid3 mt">
+      <div class="card"><span class="tag">AWS-</span><h5>AWS 提供の汎用操作</h5><p><code>AWS-RestartEC2Instance</code>、<code>AWS-StopEC2Instance</code>、<code>AWS-CreateImage</code>、<code>AWS-UpdateLinuxAmi</code>、<code>AWS-UpdateWindowsAmi</code>、<code>AWS-RunPatchBaseline</code>（Command）など。</p></div>
+      <div class="card"><span class="tag">AWSSupport-</span><h5>サポートの調査・修復手順</h5><p><code>AWSSupport-CopyEC2Instance</code>（別 AZ／サブネット／VPC へコピー）、<code>AWSSupport-ExecuteEC2Rescue</code>（接続できないインスタンスの修復）、<code>AWSSupport-TroubleshootSSH</code>、<code>AWSSupport-ResetAccess</code> など。</p></div>
+      <div class="card"><span class="tag">AWSConfigRemediation-</span><h5>Config 修復用</h5><p><code>AWSConfigRemediation-EnableS3BucketDefaultEncryption</code> など、Config ルールの非準拠を直すための手順。自作ランブックも修復アクションに指定できます。</p></div>
+    </div>
+    <h4>主なアクション（ステップ）</h4>
+    <dl class="kv">
+      <dt>aws:executeAwsApi</dt><dd>任意の AWS API を 1 回呼ぶ（例：<code>ec2 CreateTags</code>）。</dd>
+      <dt>aws:executeScript</dt><dd><strong>Python または PowerShell</strong> のスクリプトを実行。条件分岐や複数 API の組み合わせなど、複雑な処理を書ける。</dd>
+      <dt>aws:runCommand</dt><dd>インスタンス上で Run Command を実行（OS 内部の作業）。</dd>
+      <dt>aws:changeInstanceState / aws:createImage</dt><dd>インスタンスの起動・停止、AMI の作成。</dd>
+      <dt>aws:waitForAwsResourceProperty</dt><dd>リソースが指定の状態になるまで待つ。</dd>
+      <dt>aws:branch / aws:approve</dt><dd>条件分岐、人による承認（SNS で承認依頼を送る）。</dd>
+      <dt>aws:invokeLambdaFunction</dt><dd>Lambda 関数を呼び出す。</dd>
+    </dl>
+<pre class="mt"><code>description: アイドルなインスタンスを停止してタグを付ける
+schemaVersion: '0.3'
+assumeRole: '{{ AutomationAssumeRole }}'
+parameters:
+  InstanceId: { type: String }
+  AutomationAssumeRole: { type: String }
+mainSteps:
+  - name: Stop
+    action: aws:changeInstanceState
+    inputs:
+      InstanceIds: ['{{ InstanceId }}']
+      DesiredState: stopped
+  - name: Tag
+    action: aws:executeAwsApi
+    inputs:
+      Service: ec2
+      Api: CreateTags
+      Resources: ['{{ InstanceId }}']
+      Tags: [{ Key: AutoStopped, Value: 'true' }]
+  - name: Summarize
+    action: aws:executeScript
+    inputs:
+      Runtime: python3.11
+      Handler: handler
+      InputPayload: { id: '{{ InstanceId }}' }
+      Script: |-
+        def handler(events, context):
+            return {"message": f"stopped {events['id']}"}
+    outputs:
+      - { Name: message, Selector: $.Payload.message, Type: String }</code></pre>
+    <h4>実行方法</h4>
+    <dl class="kv mt">
+      <dt>コンソール／CLI</dt><dd><code>aws ssm start-automation-execution --document-name ... --parameters ...</code></dd>
+      <dt>SDK（Python）</dt><dd>Lambda や運用スクリプトから boto3 で起動（下の例）。</dd>
+      <dt>EventBridge</dt><dd>ルールのターゲットに「Systems Manager Automation」を指定（EventBridge が引き受ける IAM ロールが必要）。</dd>
+      <dt>Config 修復</dt><dd>ルールの修復アクションとして自動／手動で実行。</dd>
+      <dt>メンテナンスウィンドウ</dt><dd>決まった時間帯のタスクとして実行。</dd>
+      <dt>レート制御</dt><dd>タグやリソースグループで多数のターゲットを指定し、<strong>同時実行数</strong>と<strong>エラーしきい値</strong>で段階的に実行。複数アカウント・複数リージョンにも展開できる。</dd>
+    </dl>
+<pre class="mt"><code>import boto3
+
+ssm = boto3.client("ssm", region_name="ap-northeast-1")
+
+def handler(event, context):
+    # EventBridge 経由で受け取った EC2 状態変化イベントからインスタンス ID を取り出す
+    instance_id = event["detail"]["instance-id"]
+    resp = ssm.start_automation_execution(
+        DocumentName="AWS-RestartEC2Instance",
+        Parameters={"InstanceId": [instance_id]},
+    )
+    return resp["AutomationExecutionId"]</code></pre>
+    <div class="callout pdf mt">
+      <span class="lbl">演習 PDF の論点（問題 3・18）</span>
+      <ul>
+        <li>AMI へのパッチ適用 → 新しい起動テンプレートのバージョン作成 → Auto Scaling グループの更新、という一連の流れを自動化するのは <strong>Automation</strong>（スクリプトステップを含むランブック）。Patch Manager は稼働中インスタンスへのパッチ適用で、AMI の更新は担いません。</li>
+        <li>インスタンスを別 AZ へ移す作業は <code>AWSSupport-CopyEC2Instance</code> で AMI 作成と新規起動を自動化できます。元のインスタンスの削除は含まれないので別途行い、Auto Scaling 配下ならグループとの整合も確認します。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== AI ops & Health ===== -->
+  <section class="sec" id="d1-ai">
+    <h3>Kiro・AWS DevOps Agent・AWS Health <span class="sk">1.2.1</span> <span class="sk">3.2.2</span></h3>
+    <div class="callout new">
+      <span class="lbl">v1.1 で追加された AI 運用支援</span>
+      <p>2026 年 6 月の改訂で例示に加わったサービスです。出題傾向はまだ少ないため、「何を任せられるか」と「既存のどの仕組みと組み合わせるか」を押さえておけば十分です。</p>
+    </div>
+    <div class="grid2 mt">
+      <div class="card"><span class="tag">AWS DevOps Agent（2026 年 3 月 GA）</span><h5>インシデントの自律調査</h5><ul><li>CloudWatch のアラームやメトリクス、ログ、トレース、デプロイ履歴、コードリポジトリ、外部の監視ツールやチケットシステムの情報を横断して、障害の<strong>根本原因の調査</strong>と<strong>緩和策の提案</strong>を行う運用エージェント。</li><li>アプリケーションのトポロジー（構成要素の関係）を把握し、過去のインシデントから再発防止策を推奨。</li><li>EventBridge などと連携し、アラーム発生をきっかけに調査を自動で開始できる。実際の変更は人の承認を挟むのが前提。</li></ul></div>
+      <div class="card"><span class="tag">Kiro</span><h5>エージェント型の開発環境（IDE／CLI）</h5><ul><li>仕様（スペック）を起点にコード・IaC・スクリプトを生成するエージェント型 IDE。</li><li>MCP サーバー経由で AWS の API や CloudWatch のデータを参照させ、メトリクスの分析、修復用スクリプトやランブック、CloudFormation の修正案を作らせる使い方が想定されます。</li><li>運用者の立場では「修復手順の作成とコード化を速めるツール」と位置づけておけば足ります。</li></ul></div>
+    </div>
+    <h4>AWS Health と EventBridge</h4>
+    <div class="prose">
+      <p>AWS Health は、AWS 側の障害（issue）、予定されたメンテナンスや変更（scheduledChange）、アカウントへのお知らせ（accountNotification）を通知します。<strong>AWS Health Dashboard</strong> の「アカウントのヘルス」画面で自分のリソースに影響するイベントを確認でき、Organizations と連携すると組織全体のイベントを集約できます。</p>
+      <p>EC2 のスケジュールされたイベント（インスタンスのリタイア、システムの再起動、メンテナンス）は Health と EC2 コンソールに表示されます。EBS-backed のインスタンスなら、予定日前に自分で<strong>停止→起動</strong>すると別ホストへ移り、イベントを回避できます。</p>
+    </div>
+    <figure class="fig mt">
+      <div class="canvas">
+      <svg viewBox="0 0 860 140" role="img" aria-label="AWS HealthのイベントをEventBridgeルールが受け、Lambdaまたは SSM Automation が対象インスタンスを停止し、SNSで通知する">
+        <defs><marker id="a-health" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <rect class="s-box" x="20" y="40" width="170" height="60" rx="6"/><text class="s-tb" x="105" y="66" text-anchor="middle">AWS Health</text><text class="s-ts" x="105" y="86" text-anchor="middle">source: aws.health</text>
+        <rect class="s-acc" x="250" y="40" width="190" height="60" rx="6"/><text class="s-tb" x="345" y="66" text-anchor="middle">EventBridge ルール</text><text class="s-ts" x="345" y="86" text-anchor="middle">EC2 の Health イベント</text>
+        <rect class="s-box" x="500" y="16" width="170" height="48" rx="6"/><text class="s-tb" x="585" y="38" text-anchor="middle">Lambda／SSM</text><text class="s-ts" x="585" y="55" text-anchor="middle">対象インスタンスを停止</text>
+        <rect class="s-box" x="500" y="78" width="170" height="48" rx="6"/><text class="s-tb" x="585" y="100" text-anchor="middle">SNS</text><text class="s-ts" x="585" y="117" text-anchor="middle">運用チームへ通知</text>
+        <rect class="s-box2" x="720" y="16" width="120" height="48" rx="6"/><text class="s-t" x="780" y="45" text-anchor="middle">EC2</text>
+        <line class="s-l" x1="190" y1="70" x2="246" y2="70" marker-end="url(#a-health)"/>
+        <line class="s-l" x1="440" y1="62" x2="496" y2="42" marker-end="url(#a-health)"/>
+        <line class="s-l" x1="440" y1="78" x2="496" y2="100" marker-end="url(#a-health)"/>
+        <line class="s-l" x1="670" y1="40" x2="716" y2="40" marker-end="url(#a-health)"/>
+        <text class="s-ts" x="218" y="60" text-anchor="middle">イベント</text>
+      </svg>
+      </div>
+      <figcaption><b>AWS Health イベントを起点にした自動対応。</b>Health 単体ではアクションを実行できないため、EventBridge のルールで受けて Lambda や SSM Automation をターゲットにします（演習 PDF 問題 26 の論点）。</figcaption>
+    </figure>
+    <div class="callout trap mt">
+      <span class="lbl">ひっかけ注意</span>
+      <ul>
+        <li>「基盤ハードウェアの劣化やメンテナンス予定」は CloudWatch のステータスチェックではなく Health のイベントです。ステータスチェック失敗は「すでに壊れた」状態の検知です。</li>
+        <li>Health の EventBridge 連携は追加設定なしで使えます。組織全体のイベントを 1 か所で受けるなら、組織ビュー（委任管理者）を有効にします。</li>
+      </ul>
+    </div>
+  </section>

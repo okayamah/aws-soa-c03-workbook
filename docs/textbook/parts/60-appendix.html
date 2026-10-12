@@ -1,0 +1,222 @@
+
+<!-- ================= Appendix ================= -->
+<section class="chapter" id="appendix">
+  <div class="chapter-head">
+    <span class="num"><span class="dot dx"></span>APPENDIX</span>
+    <h2>付録</h2>
+  </div>
+
+  <!-- ===== PDF map ===== -->
+  <section class="sec" id="pdf-map">
+    <h3>非公式演習 27 問の論点マップ</h3>
+    <div class="prose">
+      <p>添付された非公式の演習問題（27 問）について、各問の<strong>論点と正解の決め手</strong>を本書の節に対応付けました。問題文と選択肢は有料教材のため転載していません。分野は PDF の表記に従い、表記のない問題 25 は内容から分野 1（スキル 1.3.3）と推定しています。</p>
+    </div>
+    <figure class="fig mt">
+      <div class="canvas">
+      <svg viewBox="0 0 700 260" role="img" aria-label="PDFの27問の分野別問題数。分野1が8問、分野2と3が5問、分野4が2問、分野5が7問。公式の重みから期待される問題数と比べると分野4が少なく分野5が多い">
+        <line class="s-grid" x1="230" y1="14" x2="230" y2="214"/><line class="s-grid" x1="305" y1="14" x2="305" y2="214"/><line class="s-grid" x1="380" y1="14" x2="380" y2="214"/><line class="s-grid" x1="455" y1="14" x2="455" y2="214"/><line class="s-grid" x1="530" y1="14" x2="530" y2="214"/>
+        <text class="s-tm" x="230" y="232" text-anchor="middle">0</text><text class="s-tm" x="305" y="232" text-anchor="middle">2</text><text class="s-tm" x="380" y="232" text-anchor="middle">4</text><text class="s-tm" x="455" y="232" text-anchor="middle">6</text><text class="s-tm" x="530" y="232" text-anchor="middle">8 問</text>
+        <g class="bar-hit"><title>分野1: 8問（期待値 5.9問）</title><text class="s-t" x="220" y="38" text-anchor="end">1 モニタリング・最適化</text><path class="f-d1" d="M230 24 h296 a4 4 0 0 1 4 4 v12 a4 4 0 0 1 -4 4 h-296 z"/><text class="s-tb" x="540" y="39">8</text><line class="s-lb" x1="452.75" y1="18" x2="452.75" y2="50"/></g>
+        <g class="bar-hit"><title>分野2: 5問（期待値 5.9問）</title><text class="s-t" x="220" y="78" text-anchor="end">2 信頼性・事業継続</text><path class="f-d2" d="M230 64 h183.5 a4 4 0 0 1 4 4 v12 a4 4 0 0 1 -4 4 h-183.5 z"/><text class="s-tb" x="427" y="79">5</text><line class="s-lb" x1="452.75" y1="58" x2="452.75" y2="90"/></g>
+        <g class="bar-hit"><title>分野3: 5問（期待値 5.9問）</title><text class="s-t" x="220" y="118" text-anchor="end">3 デプロイ・自動化</text><path class="f-d3" d="M230 104 h183.5 a4 4 0 0 1 4 4 v12 a4 4 0 0 1 -4 4 h-183.5 z"/><text class="s-tb" x="427" y="119">5</text><line class="s-lb" x1="452.75" y1="98" x2="452.75" y2="130"/></g>
+        <g class="bar-hit"><title>分野4: 2問（期待値 4.3問）</title><text class="s-t" x="220" y="158" text-anchor="end">4 セキュリティ</text><path class="f-d4" d="M230 144 h71 a4 4 0 0 1 4 4 v12 a4 4 0 0 1 -4 4 h-71 z"/><text class="s-tb" x="315" y="159">2</text><line class="s-lb" x1="392" y1="138" x2="392" y2="170"/></g>
+        <g class="bar-hit"><title>分野5: 7問（期待値 4.9問）</title><text class="s-t" x="220" y="198" text-anchor="end">5 ネットワーク・配信</text><path class="f-d5" d="M230 184 h258.5 a4 4 0 0 1 4 4 v12 a4 4 0 0 1 -4 4 h-258.5 z"/><text class="s-tb" x="502" y="199">7</text><line class="s-lb" x1="412.25" y1="178" x2="412.25" y2="210"/></g>
+        <line class="s-axis" x1="230" y1="14" x2="230" y2="214"/>
+        <line class="s-lb" x1="566" y1="246" x2="566" y2="256"/><text class="s-ts" x="574" y="255">公式の重みでの期待問題数</text>
+      </svg>
+      </div>
+      <figcaption><b>PDF の分野別の問題数（棒）と、公式の重みから見た期待値（赤の縦線）。</b>この問題集だけでは分野 4（セキュリティ）が手薄で、分野 5 に偏っています。分野 4 は本書の<a href="#d4">第 4 章</a>と<a href="#quiz">確認問題</a>で補ってください。</figcaption>
+    </figure>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th class="num">問</th><th>分野</th><th>論点</th><th>正解の決め手</th><th>本書</th></tr></thead>
+      <tbody>
+        <tr><td class="num">1</td><td><span class="dot d1"></span> 1</td><td>EC2・Lambda・EBS の最適化推奨を直接得る</td><td>Compute Optimizer（Trusted Advisor は内部で同データを利用、CUR／Cost Explorer は可視化）</td><td><a href="#d1-compute">1.3.1</a></td></tr>
+        <tr><td class="num">2</td><td><span class="dot d3"></span> 3</td><td>汎用 → コンピューティング最適化へのタイプ変更</td><td>停止 → タイプ変更 → 起動。実行中は不可。互換性（アーキテクチャ、ENA／NVMe）を確認</td><td><a href="#d1-compute">1.3.1</a></td></tr>
+        <tr><td class="num">3</td><td><span class="dot d3"></span> 3</td><td>AMI のパッチ適用から ASG 更新までの自動化</td><td>SSM Automation（スクリプトを含むランブック）。Patch Manager は稼働中ノード向け</td><td><a href="#d1-auto">1.2.3</a></td></tr>
+        <tr><td class="num">4</td><td><span class="dot d5"></span> 5</td><td>CloudFront の実際のキャッシュ期間</td><td>最小 TTL ≤ max-age ≤ 最大 TTL ならヘッダーどおり。max-age は Expires より優先</td><td><a href="#d5-cf">5.2.3</a></td></tr>
+        <tr><td class="num">5</td><td><span class="dot d2"></span> 2</td><td>InsufficientInstanceCapacity への対処（2 つ）</td><td>インスタンスタイプを変える、AZ を変える。台数設定の変更は無意味</td><td><a href="#d2-asg">2.1.1</a></td></tr>
+        <tr><td class="num">6</td><td><span class="dot d4"></span> 4</td><td>Security Hub で標準ごとに重複する検出結果の統合</td><td>管理者アカウントで「統合されたコントロールの検出結果」を有効化</td><td><a href="#d4-findings">4.2.5</a></td></tr>
+        <tr><td class="num">7</td><td><span class="dot d1"></span> 1</td><td>接続数増加による RDS の性能低下（2 つ）</td><td>RDS Proxy、Database Insights（旧 Performance Insights）で SQL を特定して改善</td><td><a href="#d1-rds">1.3.5</a></td></tr>
+        <tr><td class="num">8</td><td><span class="dot d3"></span> 3</td><td>複数 AZ の EC2 で数十 TB を共有</td><td>EFS。マウントターゲットは AZ ごとに 1 つ</td><td><a href="#d1-shared">1.3.4</a></td></tr>
+        <tr><td class="num">9</td><td><span class="dot d1"></span> 1</td><td>低 CPU が 30 分続いたら自動停止</td><td>CPUUtilization のアラーム＋EC2 アクション（停止）</td><td><a href="#d1-alarms">1.1.3</a></td></tr>
+        <tr><td class="num">10</td><td><span class="dot d1"></span> 1</td><td>構成変更の監視と VPC 全トラフィックの監視（2 つ）</td><td>Config、専用サブネットの Network Firewall＋ルートテーブル</td><td><a href="#d4-config">4.1.5</a>・<a href="#d5-protect">5.1.3</a></td></tr>
+        <tr><td class="num">11</td><td><span class="dot d1"></span> 1</td><td>フローログから ping 失敗の原因を特定</td><td>行き ACCEPT・戻り REJECT → NACL のアウトバウンド</td><td><a href="#d5-logs">5.3.2</a></td></tr>
+        <tr><td class="num">12</td><td><span class="dot d2"></span> 2</td><td>最大 1 の ASG がピークで CPU 90% 超（2 つ）</td><td>最大キャパシティを増やす、平均 CPU に基づくスケーリング</td><td><a href="#d2-asg">2.1.1</a></td></tr>
+        <tr><td class="num">13</td><td><span class="dot d2"></span> 2</td><td>Aurora の接続数に応じた自動スケール</td><td>Aurora Auto Scaling のターゲットを劣化点より手前（1,000）に</td><td><a href="#d2-dbscale">2.1.3</a></td></tr>
+        <tr><td class="num">14</td><td><span class="dot d5"></span> 5</td><td>VPC ピアリングで VPC-A に入るルート（2 つ）</td><td>自 CIDR → local、相手 CIDR → pcx</td><td><a href="#d5-private">5.1.2</a></td></tr>
+        <tr><td class="num">15</td><td><span class="dot d3"></span> 3</td><td>EC2 フリートのパッチ管理</td><td>Systems Manager Patch Manager</td><td><a href="#d3-ssm">3.2.1</a></td></tr>
+        <tr><td class="num">16</td><td><span class="dot d2"></span> 2</td><td>DynamoDB の日次・コールド移行・暗号化（2 つ）</td><td>CMK で暗号化したボールト＋日次ルールとライフサイクルのバックアッププラン</td><td><a href="#d2-backup">2.3.1</a></td></tr>
+        <tr><td class="num">17</td><td><span class="dot d5"></span> 5</td><td>誤ってキャッシュされた画像の削除（2 つ）</td><td>無効化、新しいバージョンの提供</td><td><a href="#d5-cf">5.3.3</a></td></tr>
+        <tr><td class="num">18</td><td><span class="dot d3"></span> 3</td><td>EC2 を別 AZ へ移動（2 つ）</td><td>AMI から別 AZ で起動、<code>AWSSupport-CopyEC2Instance</code></td><td><a href="#d1-auto">1.2.3</a></td></tr>
+        <tr><td class="num">19</td><td><span class="dot d1"></span> 1</td><td>エージェント導入後にログを送る</td><td>設定ファイル作成 → <code>fetch-config</code> で起動</td><td><a href="#d1-agent">1.1.2</a></td></tr>
+        <tr><td class="num">20</td><td><span class="dot d5"></span> 5</td><td>オンプレから Route 53 のレコードを照会</td><td>インバウンドエンドポイント＋TCP/UDP 53 のインバウンド許可</td><td><a href="#d5-resolver">5.2.1</a></td></tr>
+        <tr><td class="num">21</td><td><span class="dot d5"></span> 5</td><td>SSH のための追加ネットワーク設定（2 つ）</td><td>NACL インバウンド 22、NACL アウトバウンド 1024-65535</td><td><a href="#d5-sgnacl">5.1.1</a></td></tr>
+        <tr><td class="num">22</td><td><span class="dot d2"></span> 2</td><td>定常負荷＋スパイクの DynamoDB をコスト効率よく</td><td>プロビジョンドのまま Auto Scaling</td><td><a href="#d2-dbscale">2.1.3</a></td></tr>
+        <tr><td class="num">23</td><td><span class="dot d5"></span> 5</td><td>キャッシュヒット率の向上（2 つ）</td><td>必要なクエリ文字列のみ転送、長い max-age</td><td><a href="#d5-cf">5.3.3</a></td></tr>
+        <tr><td class="num">24</td><td><span class="dot d5"></span> 5</td><td>プライベートな DB にカスタムドメイン</td><td>プライベートホストゾーン＋A レコード</td><td><a href="#d5-r53">5.2.2</a></td></tr>
+        <tr><td class="num">25</td><td><span class="dot d1"></span> 1（推定）</td><td>S3 へのアップロード高速化</td><td>S3 Transfer Acceleration</td><td><a href="#d1-s3">1.3.3</a></td></tr>
+        <tr><td class="num">26</td><td><span class="dot d1"></span> 1</td><td>ハードウェア劣化・メンテナンス通知で自動停止</td><td>Health → EventBridge → Lambda</td><td><a href="#d1-ai">1.2.1</a></td></tr>
+        <tr><td class="num">27</td><td><span class="dot d4"></span> 4</td><td>ガバナンスモードのオブジェクト削除（2 つ）</td><td><code>s3:BypassGovernanceRetention</code> 権限＋バイパスヘッダー</td><td><a href="#d2-versioning">2.3.3</a></td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout trap mt">
+      <span class="lbl">PDF の解説で注意したい点</span>
+      <ul>
+        <li><strong>問題 5</strong>：オンデマンドキャパシティ予約は「ASG に適用できない」とありますが、起動テンプレートで予約を対象に指定すれば ASG でも使えます。</li>
+        <li><strong>問題 7</strong>：Performance Insights の終了日は PDF では 2025 年 11 月 30 日とされていますが、AWS ドキュメントの最新の記載ではコンソール体験の終了は <strong>2026 年 7 月 31 日</strong>に延期されています（API は継続）。</li>
+        <li><strong>問題 10</strong>：「VPC 内の全トラフィック」の監視・防御は Network Firewall が正解ですが、通信の<strong>記録</strong>が目的なら VPC フローログも選択肢になります。設問が「監視とブロック（IPS／IDS）」を求めている点が決め手です。</li>
+        <li><strong>問題 27</strong>：選択肢のヘッダー名は綴りが誤っています（正しくは <code>x-amz-bypass-governance-retention</code>）。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== Numbers ===== -->
+  <section class="sec" id="numbers">
+    <h3>暗記すべき数値</h3>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>分野</th><th>項目</th><th>値</th></tr></thead>
+      <tbody>
+        <tr><td><span class="dot d1"></span> CloudWatch</td><td>メトリクスの保持</td><td>1 分未満 3 時間／1 分 15 日／5 分 63 日／1 時間 15 か月（455 日）</td></tr>
+        <tr><td><span class="dot d1"></span> CloudWatch</td><td>EC2 の監視間隔</td><td>基本 5 分、詳細 1 分、高解像度カスタムは最短 1 秒</td></tr>
+        <tr><td><span class="dot d1"></span> CloudWatch Logs</td><td>サブスクリプションフィルター</td><td>1 ロググループあたり 2 つ</td></tr>
+        <tr><td><span class="dot d1"></span> CloudTrail</td><td>イベント履歴</td><td>管理イベント 90 日（無料）</td></tr>
+        <tr><td><span class="dot d1"></span> EventBridge</td><td>再試行とターゲット</td><td>最大 24 時間・185 回、1 ルールあたり 5 ターゲット</td></tr>
+        <tr><td><span class="dot d1"></span> Compute Optimizer</td><td>分析期間</td><td>既定 14 日、拡張インフラストラクチャメトリクスで 93 日</td></tr>
+        <tr><td><span class="dot d1"></span> EBS gp3</td><td>ベースラインと上限</td><td>3,000 IOPS・125 MiB/s、最大 80,000 IOPS・2,000 MiB/s・64 TiB</td></tr>
+        <tr><td><span class="dot d1"></span> EBS gp2</td><td>性能</td><td>3 IOPS/GiB（最小 100、最大 16,000）、1 TiB 未満は 3,000 までバースト</td></tr>
+        <tr><td><span class="dot d1"></span> EBS io2 BE</td><td>上限</td><td>256,000 IOPS・4,000 MiB/s・64 TiB、マルチアタッチ最大 16 台</td></tr>
+        <tr><td><span class="dot d1"></span> EBS</td><td>Elastic Volumes</td><td>次の変更まで 6 時間、縮小不可</td></tr>
+        <tr><td><span class="dot d1"></span> S3</td><td>プレフィックスあたりの性能</td><td>PUT 等 3,500／GET 等 5,500 リクエスト毎秒</td></tr>
+        <tr><td><span class="dot d1"></span> S3</td><td>マルチパート</td><td>100 MB 超で推奨、5 GB 超は必須、パート 5 MiB〜5 GiB・最大 10,000</td></tr>
+        <tr><td><span class="dot d1"></span> S3</td><td>最低保存期間</td><td>IA 系 30 日、Glacier IR／Flexible 90 日、Deep Archive 180 日</td></tr>
+        <tr><td><span class="dot d1"></span> S3 Glacier</td><td>取り出し時間</td><td>Flexible：迅速 1〜5 分／標準 3〜5 時間／一括 5〜12 時間、Deep Archive：標準 12 時間／一括 48 時間</td></tr>
+        <tr><td><span class="dot d1"></span> 配置</td><td>スプレッドプレイスメントグループ</td><td>AZ あたり 7 インスタンス、パーティションは AZ あたり 7 パーティション</td></tr>
+        <tr><td><span class="dot d2"></span> ASG</td><td>シンプルスケーリングのクールダウン</td><td>既定 300 秒</td></tr>
+        <tr><td><span class="dot d2"></span> ASG</td><td>ライフサイクルフック</td><td>既定タイムアウト 1 時間</td></tr>
+        <tr><td><span class="dot d2"></span> ELB</td><td>登録解除の遅延</td><td>既定 300 秒、ALB のアイドルタイムアウト既定 60 秒</td></tr>
+        <tr><td><span class="dot d2"></span> Route 53</td><td>ヘルスチェック</td><td>間隔 30 秒／10 秒、失敗しきい値 既定 3、18% 超のチェッカーが正常なら正常</td></tr>
+        <tr><td><span class="dot d2"></span> RDS</td><td>自動バックアップ</td><td>保持 0〜35 日、PITR の粒度 約 5 分</td></tr>
+        <tr><td><span class="dot d2"></span> RDS</td><td>フェイルオーバー</td><td>マルチ AZ 配置 60〜120 秒、マルチ AZ クラスター 通常 35 秒程度</td></tr>
+        <tr><td><span class="dot d2"></span> Aurora</td><td>冗長性とレプリカ</td><td>3 AZ に 6 コピー、レプリカ最大 15、バックトラック最大 72 時間</td></tr>
+        <tr><td><span class="dot d2"></span> DynamoDB</td><td>キャパシティユニット</td><td>RCU：4 KB を強い整合性 1 回／結果整合性 2 回、WCU：1 KB を 1 回</td></tr>
+        <tr><td><span class="dot d2"></span> DynamoDB</td><td>PITR</td><td>1〜35 日（設定可能）</td></tr>
+        <tr><td><span class="dot d2"></span> AWS Backup</td><td>コールドストレージ</td><td>最低 90 日保持、Vault Lock コンプライアンスの猶予期間 最低 72 時間</td></tr>
+        <tr><td><span class="dot d2"></span> S3</td><td>RTC</td><td>15 分以内のレプリケーションを SLA で保証</td></tr>
+        <tr><td><span class="dot d3"></span> VPC</td><td>予約 IP</td><td>サブネットごとに 5 個（/28 なら利用可能 11）</td></tr>
+        <tr><td><span class="dot d3"></span> CloudFormation</td><td>CreationPolicy の Timeout</td><td>ISO 8601 形式（例 PT15M）、最大 12 時間</td></tr>
+        <tr><td><span class="dot d3"></span> Parameter Store</td><td>サイズ</td><td>Standard 4 KB、Advanced 8 KB</td></tr>
+        <tr><td><span class="dot d3"></span> Lambda</td><td>非同期呼び出しの再試行</td><td>既定 2 回</td></tr>
+        <tr><td><span class="dot d4"></span> IAM</td><td>ロールのセッション</td><td>既定 1 時間、最大 12 時間、ロールの連鎖は 1 時間</td></tr>
+        <tr><td><span class="dot d4"></span> KMS</td><td>削除待機期間</td><td>7〜30 日、自動ローテーション期間 90〜2,560 日、直接暗号化 4 KB まで</td></tr>
+        <tr><td><span class="dot d4"></span> ACM</td><td>自動更新</td><td>期限の 60 日前から。インポート証明書の期限切れイベントは既定 45 日前</td></tr>
+        <tr><td><span class="dot d4"></span> Trusted Advisor</td><td>アクセスキーのローテーション</td><td>90 日</td></tr>
+        <tr><td><span class="dot d5"></span> NACL</td><td>エフェメラルポート</td><td>汎用的には 1024〜65535（Linux 32768〜60999、Windows 49152〜65535）</td></tr>
+        <tr><td><span class="dot d5"></span> Route 53</td><td>複数値回答</td><td>正常なレコードを最大 8 個</td></tr>
+        <tr><td><span class="dot d5"></span> Global Accelerator</td><td>入口</td><td>静的エニーキャスト IPv4 アドレス 2 個</td></tr>
+        <tr><td><span class="dot d5"></span> VPC フローログ</td><td>集約間隔</td><td>既定 10 分、または 1 分</td></tr>
+        <tr><td><span class="dot d5"></span> CloudFront</td><td>エラーキャッシュ</td><td>エラー応答の最小 TTL 既定 10 秒</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <!-- ===== Versus ===== -->
+  <section class="sec" id="versus">
+    <h3>紛らわしいサービスの対比</h3>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>比べるもの</th><th>見分け方</th></tr></thead>
+      <tbody>
+        <tr><td>CloudTrail ／ Config</td><td>誰がどの API を呼んだか ／ リソースの設定がどう変わり、ルールに準拠しているか</td></tr>
+        <tr><td>CloudWatch ステータスチェック ／ AWS Health</td><td>すでに起きた障害の検知 ／ AWS 側の障害・予定メンテナンス・リタイアの通知</td></tr>
+        <tr><td>メトリクスフィルター ／ サブスクリプションフィルター ／ Logs Insights</td><td>件数をメトリクス化（新しいログのみ） ／ リアルタイム転送 ／ 過去ログの対話的分析</td></tr>
+        <tr><td>複合アラーム ／ メトリクス数式</td><td>アラームの状態を論理演算で組み合わせる ／ メトリクスの値を計算して 1 本にする</td></tr>
+        <tr><td>Run Command ／ State Manager ／ Automation ／ Patch Manager</td><td>単発の一斉実行 ／ あるべき状態の継続適用 ／ AWS API を含む複数手順 ／ パッチのスキャンと適用</td></tr>
+        <tr><td>Image Builder ／ Automation（AWS-UpdateLinuxAmi）</td><td>ゴールデンイメージの継続的パイプライン（配布・テスト付き） ／ ランブックで AMI 作成と後続処理をつなぐ</td></tr>
+        <tr><td>AWS Backup ／ Data Lifecycle Manager</td><td>多サービス・クロスアカウント・ロック・監査 ／ EBS スナップショットと AMI 専用で簡単</td></tr>
+        <tr><td>マルチ AZ ／ リードレプリカ</td><td>可用性（スタンバイは読めない） ／ 読み取り性能（非同期、昇格可能）</td></tr>
+        <tr><td>ElastiCache（Valkey/Redis）／ Memcached ／ DAX</td><td>高可用・永続化・豊富なデータ型 ／ 単純でマルチスレッド ／ DynamoDB 専用のインメモリキャッシュ</td></tr>
+        <tr><td>スケジュール ／ 予測 ／ ターゲット追跡</td><td>日時が分かっている ／ 周期的なパターンを学習 ／ 予測できない変動に追従</td></tr>
+        <tr><td>EFS ／ FSx for Windows ／ FSx for Lustre ／ FSx for ONTAP ／ S3 Files</td><td>Linux 共有（NFS） ／ Windows 共有（SMB・AD） ／ HPC の高速並列 ／ マルチプロトコル ／ S3 のデータをファイルとして</td></tr>
+        <tr><td>DataSync ／ Storage Gateway ／ Transfer Acceleration</td><td>大量データの移行・同期 ／ オンプレからの継続的なハイブリッド利用 ／ 遠隔地からの S3 アップロード高速化</td></tr>
+        <tr><td>Compute Optimizer ／ Trusted Advisor ／ Cost Explorer</td><td>リソースのサイズ適正化 ／ 幅広いベストプラクティスの点検 ／ コストの可視化と予測</td></tr>
+        <tr><td>ネストされたスタック ／ クロススタック参照</td><td>親子で一体管理・再利用 ／ 独立したスタック間で値を共有（Export/ImportValue）</td></tr>
+        <tr><td>StackSets ／ RAM</td><td>同じものを各アカウント・リージョンに作る ／ 1 つのものを共有して使う</td></tr>
+        <tr><td>SCP ／ 権限境界 ／ RCP</td><td>アカウント全体のプリンシパルの上限 ／ 個々のユーザー・ロールの上限 ／ リソースに対するアクセスの上限</td></tr>
+        <tr><td>GuardDuty ／ Inspector ／ Macie ／ Security Hub</td><td>脅威 ／ 脆弱性 ／ 機微データ ／ 集約と優先順位付け・コントロール評価</td></tr>
+        <tr><td>Secrets Manager ／ Parameter Store</td><td>ローテーション・レプリカが必要な秘密情報 ／ 設定値や安価な SecureString</td></tr>
+        <tr><td>AWS マネージドキー ／ カスタマーマネージドキー</td><td>手軽だが共有・ポリシー変更不可 ／ クロスアカウント共有と細かな制御</td></tr>
+        <tr><td>セキュリティグループ ／ NACL</td><td>ENI 単位・ステートフル・許可のみ ／ サブネット単位・ステートレス・拒否可・番号順</td></tr>
+        <tr><td>ゲートウェイ型 ／ インターフェイス型エンドポイント</td><td>S3・DynamoDB、ルート、無料 ／ 多数のサービス、ENI＋DNS、有料、VPC 外からも可</td></tr>
+        <tr><td>VPC ピアリング ／ Transit Gateway ／ PrivateLink</td><td>1 対 1・推移不可 ／ 多数の VPC とオンプレのハブ ／ 特定サービスだけを公開（CIDR 重複可）</td></tr>
+        <tr><td>Resolver インバウンド ／ アウトバウンド</td><td>オンプレ → VPC の名前解決 ／ VPC → オンプレの名前解決</td></tr>
+        <tr><td>エイリアス ／ CNAME</td><td>AWS リソース向け、頂点に可、無料 ／ 任意のドメイン名、頂点に不可</td></tr>
+        <tr><td>署名付き URL ／ 署名付き Cookie</td><td>個別のファイル ／ 複数ファイル</td></tr>
+        <tr><td>CloudFront ／ Global Accelerator</td><td>HTTP キャッシュ配信 ／ 静的 IP と高速フェイルオーバー（TCP/UDP）</td></tr>
+        <tr><td>WAF ／ Network Firewall ／ DNS Firewall ／ Shield</td><td>HTTP（L7） ／ VPC のパケット検査（IPS） ／ DNS クエリのドメイン制御 ／ DDoS</td></tr>
+        <tr><td>Reachability Analyzer ／ フローログ ／ Traffic Mirroring</td><td>設定の静的解析 ／ 実際の通信の許可・拒否の記録 ／ パケットの中身</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <!-- ===== Quiz ===== -->
+  <section class="sec" id="quiz">
+    <h3>確認問題 50 問</h3>
+    <div class="prose">
+      <p>公式ガイドの重み（分野 1〜3 が各 11 問、分野 4 が 8 問、分野 5 が 9 問）に合わせて作成したオリジナル問題です。択一は選択肢を押すとすぐ判定、複数選択は指定数を選んでから「回答する」を押してください。回答状況はこのブラウザにだけ保存されます。</p>
+    </div>
+    <div class="quiz-bar mt" role="toolbar" aria-label="確認問題の操作">
+      <span class="score" id="quiz-score">正答 0 / 回答 0</span>
+      <button class="btn" type="button" data-filter="all" aria-pressed="true">全分野</button>
+      <button class="btn" type="button" data-filter="1" aria-pressed="false">分野 1</button>
+      <button class="btn" type="button" data-filter="2" aria-pressed="false">分野 2</button>
+      <button class="btn" type="button" data-filter="3" aria-pressed="false">分野 3</button>
+      <button class="btn" type="button" data-filter="4" aria-pressed="false">分野 4</button>
+      <button class="btn" type="button" data-filter="5" aria-pressed="false">分野 5</button>
+      <button class="btn" type="button" id="quiz-wrong" aria-pressed="false">誤答のみ</button>
+      <button class="btn" type="button" id="quiz-reset">回答をリセット</button>
+    </div>
+    <div class="stack mt" id="quiz-list" aria-live="polite"></div>
+  </section>
+
+  <!-- ===== Skills ===== -->
+  <section class="sec" id="skills">
+    <h3>スキル到達チェック</h3>
+    <div class="prose">
+      <p>公式ガイドの 53 スキルを一覧にしました。説明できる・設定できると判断したらチェックしてください（このブラウザに保存）。週次レビューで未チェックのスキルを翌週の重点に回す使い方を想定しています。</p>
+    </div>
+    <div class="stack mt" id="skill-list"></div>
+  </section>
+
+  <!-- ===== Sources ===== -->
+  <section class="sec" id="sources">
+    <h3>出典</h3>
+    <div class="prose">
+      <ul>
+        <li><a href="https://docs.aws.amazon.com/ja_jp/aws-certification/latest/sysops-administrator-associate-03/sysops-administrator-associate-03.html" target="_blank" rel="noopener">AWS Certified CloudOps Engineer - Associate (SOA-C03) 試験ガイド（日本語）</a>：各分野・タスク・スキル、対象／対象外サービス、C02 との比較、改訂履歴（v1.1、2026 年 6 月 1 日）</li>
+        <li><a href="https://aws.amazon.com/certification/certified-cloudops-engineer-associate/" target="_blank" rel="noopener">AWS Certified CloudOps Engineer - Associate 試験ページ</a>：試験時間・問題数・受験料・言語・準備ステップ</li>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2025/09/amazon-ebs-size-provisioned-performance-gp3-volumes" target="_blank" rel="noopener">Amazon EBS gp3 の上限引き上げ（2025 年 9 月）</a></li>
+        <li><a href="https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/USER_PerfInsights.html" target="_blank" rel="noopener">Performance Insights の終了と Database Insights への移行（Aurora ユーザーガイド）</a></li>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2025/11/aws-nat-gateway-regional-availability" target="_blank" rel="noopener">NAT ゲートウェイのリージョナル可用性モード（2025 年 11 月）</a></li>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/03/aws-devops-agent-generally-available" target="_blank" rel="noopener">AWS DevOps Agent の一般提供開始（2026 年 3 月）</a></li>
+        <li><a href="https://aws.amazon.com/about-aws/whats-new/2026/04/amazon-s3-files" target="_blank" rel="noopener">Amazon S3 Files の発表（2026 年 4 月）</a></li>
+        <li>リポジトリ内資料：<code>docs/plan/SOA-C03_LearningPlan.md</code>、<code>docs/guidelines/app-roadmap.md</code>、<code>docs/guidelines/aws-rules.md</code></li>
+        <li>非公式演習問題 PDF（27 問）：論点と解説の検証に使用。問題文・選択肢は転載していません。</li>
+      </ul>
+      <p>AWS 公式の Practice Question Set と Official Practice Exam は Skill Builder へのログインが必要なため、本書には含めていません。サービスの仕様は変わるため、受験直前には公式ドキュメントで数値を確認してください。</p>
+    </div>
+  </section>
+</section>
+
+<footer class="foot">
+  <span>SOA-C03 CloudOps 教科書 · 試験ガイド v1.1 準拠 · 2026 年 10 月作成</span>
+  <span>個人の学習用資料です。AWS の公式資料ではありません。</span>
+  <a class="backtop" href="#top">ページの先頭へ戻る</a>
+</footer>
+</main>
+</div>

@@ -1,0 +1,488 @@
+
+<!-- ================= Chapter 3 ================= -->
+<section class="chapter" id="d3">
+  <div class="chapter-head">
+    <span class="num"><span class="dot d3"></span>CONTENT DOMAIN 3 · TASK 3.1 / 3.2</span>
+    <h2>デプロイ、プロビジョニング、オートメーション</h2>
+    <div class="meta"><span class="weight">採点対象の 22%</span><span class="weight">約 11 問</span></div>
+  </div>
+  <div class="prose">
+    <p>この分野は「リソースをコードで作り、壊さずに変更し、失敗したら直す（3.1）」と「日々の運用作業を自動化する（3.2）」の 2 本柱です。CloudFormation のスタック状態とエラー対処、Systems Manager の各機能の使い分けが最頻出です。学習計画で最重要弱点としている領域なので、テンプレートの読み書きは実機で繰り返してください。</p>
+  </div>
+
+  <!-- ===== AMI ===== -->
+  <section class="sec" id="d3-ami">
+    <h3>AMI とコンテナイメージの管理（EC2 Image Builder） <span class="sk">3.1.1</span></h3>
+    <dl class="kv">
+      <dt>AMI はリージョン単位</dt><dd>別リージョンで使うには <code>copy-image</code> でコピー。暗号化された AMI のコピーでは送信先リージョンの KMS キーで再暗号化する。</dd>
+      <dt>共有</dt><dd>起動許可でアカウントや組織・OU に共有。<strong>AWS マネージドキー（<code>aws/ebs</code>）で暗号化された AMI は共有できない</strong> → カスタマーマネージドキーで再暗号化し、キーポリシーで相手アカウントに使用を許可。</dd>
+      <dt>作成時の整合性</dt><dd><code>create-image</code> は既定でインスタンスを再起動して整合性を保つ。<code>--no-reboot</code> は停止しないがファイルシステムの整合性は保証されない。</dd>
+      <dt>ライフサイクル</dt><dd>非推奨（deprecation）日時の設定、登録解除の保護、AMI のごみ箱、DLM の AMI ポリシーで古い AMI を自動整理。AMI の公開共有をブロックする設定もある。</dd>
+      <dt>最新 AMI の参照</dt><dd>Parameter Store のパブリックパラメータ（例 <code>/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64</code>）を CloudFormation の <code>AWS::SSM::Parameter::Value&lt;AWS::EC2::Image::Id&gt;</code> 型パラメータで参照すると、ハードコードを避けられる。</dd>
+    </dl>
+    <figure class="fig mt">
+      <div class="canvas">
+      <svg viewBox="0 0 900 230" role="img" aria-label="Image Builderのパイプラインはスケジュールで起動し、レシピに従ってビルド用インスタンスでコンポーネントを適用、テスト後にAMIやコンテナイメージを複数リージョンやアカウントへ配布し、起動テンプレートも更新する">
+        <defs><marker id="a-ib" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <rect class="s-box2" x="20" y="20" width="160" height="80" rx="6"/><text class="s-tb" x="100" y="48" text-anchor="middle">レシピ</text><text class="s-ts" x="100" y="68" text-anchor="middle">親イメージ＋</text><text class="s-ts" x="100" y="86" text-anchor="middle">コンポーネント</text>
+        <rect class="s-box2" x="20" y="120" width="160" height="80" rx="6"/><text class="s-tb" x="100" y="148" text-anchor="middle">インフラ設定</text><text class="s-ts" x="100" y="168" text-anchor="middle">タイプ・サブネット・</text><text class="s-ts" x="100" y="186" text-anchor="middle">インスタンスプロファイル</text>
+        <rect class="s-acc" x="240" y="60" width="170" height="100" rx="6"/><text class="s-tb" x="325" y="92" text-anchor="middle">ビルド</text><text class="s-ts" x="325" y="112" text-anchor="middle">パッチ・ソフト導入</text><text class="s-ts" x="325" y="130" text-anchor="middle">CIS 強化など</text>
+        <rect class="s-acc" x="460" y="60" width="150" height="100" rx="6"/><text class="s-tb" x="535" y="92" text-anchor="middle">テスト</text><text class="s-ts" x="535" y="112" text-anchor="middle">起動確認・</text><text class="s-ts" x="535" y="130" text-anchor="middle">Inspector スキャン</text>
+        <rect class="s-good" x="660" y="20" width="220" height="56" rx="6"/><text class="s-tb" x="770" y="44" text-anchor="middle">配布</text><text class="s-ts" x="770" y="62" text-anchor="middle">他リージョン・他アカウント</text>
+        <rect class="s-good" x="660" y="90" width="220" height="40" rx="6"/><text class="s-t" x="770" y="115" text-anchor="middle">起動テンプレートを更新</text>
+        <rect class="s-good" x="660" y="144" width="220" height="40" rx="6"/><text class="s-t" x="770" y="169" text-anchor="middle">ECR へコンテナイメージ</text>
+        <line class="s-l" x1="180" y1="60" x2="236" y2="95" marker-end="url(#a-ib)"/><line class="s-l" x1="180" y1="160" x2="236" y2="125" marker-end="url(#a-ib)"/>
+        <line class="s-l" x1="410" y1="110" x2="456" y2="110" marker-end="url(#a-ib)"/>
+        <line class="s-l" x1="610" y1="100" x2="656" y2="50" marker-end="url(#a-ib)"/><line class="s-l" x1="610" y1="110" x2="656" y2="110" marker-end="url(#a-ib)"/><line class="s-l" x1="610" y1="120" x2="656" y2="162" marker-end="url(#a-ib)"/>
+        <text class="s-ts" x="400" y="222" text-anchor="middle">パイプライン：cron スケジュール または 依存イメージの更新時に実行</text>
+      </svg>
+      </div>
+      <figcaption><b>EC2 Image Builder のパイプライン。</b>「ゴールデン AMI」を手作業なしで定期的に作り直し、配布設定で起動テンプレートの新バージョンまで作れます。ASG はインスタンスの更新で新しい AMI へ置き換えます。</figcaption>
+    </figure>
+    <div class="prose mt">
+      <p>Image Builder と Systems Manager Automation の使い分け：<strong>新規にゴールデンイメージの作成パイプラインを作るなら Image Builder</strong>、既存の Automation ランブック（<code>AWS-UpdateLinuxAmi</code> など）でパッチ済み AMI を作り ASG まで更新する一連の処理をスクリプトで組むなら Automation です。どちらも「手作業の AMI 作成」より正解になりやすい選択肢です。ビルド用インスタンスのプロファイルには <code>EC2InstanceProfileForImageBuilder</code> と <code>AmazonSSMManagedInstanceCore</code> が必要で、ビルドが失敗する典型は「サブネットからインターネットや SSM に到達できない」「プロファイルの権限不足」です。</p>
+    </div>
+  </section>
+
+  <!-- ===== Containers ===== -->
+  <section class="sec" id="d3-containers">
+    <h3>コンテナ：ECR・ECS・EKS <span class="sk">3.1.1</span> <span class="sk">1.1.2</span></h3>
+    <div class="grid3">
+      <div class="card"><span class="tag">レジストリ</span><h5>Amazon ECR</h5><ul><li><strong>ライフサイクルポリシー</strong>で古いイメージ・タグなしイメージを自動削除（ストレージコスト削減）。</li><li>イメージスキャン：基本（プッシュ時）と拡張（Inspector と連携した継続スキャン）。</li><li>タグのイミュータビリティで上書きを防止。</li><li>リージョン間・アカウント間のレプリケーション、プルスルーキャッシュ。</li><li>認証は <code>aws ecr get-login-password</code>。</li></ul></div>
+      <div class="card"><span class="tag">オーケストレーション（AWS 独自）</span><h5>Amazon ECS</h5><ul><li>タスク定義（イメージ・CPU・メモリ・ロール・ログ設定）→ サービス（希望タスク数を維持）。</li><li>起動タイプ：Fargate（サーバー管理不要）／EC2（キャパシティプロバイダーで ASG と連動）。</li><li><strong>タスク実行ロール</strong>（イメージの取得・ログ送信・シークレット取得）と<strong>タスクロール</strong>（アプリが AWS API を呼ぶ権限）の区別が頻出。</li><li>サービスの Auto Scaling（Application Auto Scaling）。</li></ul></div>
+      <div class="card"><span class="tag">オーケストレーション（Kubernetes）</span><h5>Amazon EKS</h5><ul><li>コントロールプレーンは AWS が管理。ノードはマネージドノードグループ・セルフマネージド・Fargate・Auto Mode。</li><li>Pod への権限付与は IRSA または EKS Pod Identity。</li><li>アドオン（VPC CNI、CoreDNS、CloudWatch Observability など）をバージョン管理。</li><li>ノードのスケールは Cluster Autoscaler または Karpenter。</li></ul></div>
+    </div>
+    <h4>ECS のデプロイと障害対応</h4>
+    <dl class="kv">
+      <dt>ローリング更新</dt><dd><code>minimumHealthyPercent</code>（更新中に維持する最低割合）と <code>maximumPercent</code>（一時的に増やせる上限）で速度と安全性を調整。</dd>
+      <dt>デプロイサーキットブレーカー</dt><dd>新しいタスクが起動に失敗し続けると自動で失敗判定し、<strong>前の正常なデプロイへロールバック</strong>。</dd>
+      <dt>ブルー/グリーン</dt><dd>ECS ネイティブのブルー/グリーンデプロイ、または CodeDeploy との連携で新旧タスクセットのトラフィックを切り替え。</dd>
+      <dt>タスクが起動しない</dt><dd>イメージ取得失敗（ECR へのネットワーク経路、実行ロールの権限、ECR 用 VPC エンドポイント）、メモリ不足（OOM）、ヘルスチェック失敗。停止理由は <code>describe-tasks</code> の <code>stoppedReason</code> で確認。</dd>
+      <dt>サブネットの IP 枯渇</dt><dd>Fargate や <code>awsvpc</code> ネットワークモードはタスクごとに ENI（IP）を消費する。EKS の VPC CNI も Pod ごとに IP を使うため、プレフィックス委任や追加 CIDR で対処。</dd>
+    </dl>
+  </section>
+
+  <!-- ===== CloudFormation basics ===== -->
+  <section class="sec" id="d3-cfn">
+    <h3>CloudFormation の基礎 <span class="sk">3.1.2</span></h3>
+    <div class="prose">
+      <p>テンプレート（YAML/JSON）でリソースを宣言し、スタックという単位で作成・更新・削除します。テンプレートのセクションは <code>Parameters</code>・<code>Mappings</code>・<code>Conditions</code>・<code>Resources</code>（必須）・<code>Outputs</code>・<code>Metadata</code>・<code>Transform</code> です。</p>
+    </div>
+<pre class="mt"><code>AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  Env:
+    Type: String
+    AllowedValues: [dev, prod]
+  LatestAmiId:                      # 最新 AMI をパブリックパラメータから取得
+    Type: AWS::SSM::Parameter::Value&lt;AWS::EC2::Image::Id&gt;
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+Conditions:
+  IsProd: !Equals [!Ref Env, prod]
+Resources:
+  DataVolume:
+    Type: AWS::EC2::Volume
+    DeletionPolicy: Snapshot          # スタック削除時にスナップショットを残す
+    UpdateReplacePolicy: Snapshot     # 置換が起きるときもスナップショット
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Size: !If [IsProd, 100, 20]
+      VolumeType: gp3
+      Encrypted: true
+  WebServer:
+    Type: AWS::EC2::Instance
+    CreationPolicy:                   # cfn-signal を受け取るまで CREATE_COMPLETE にしない
+      ResourceSignal: { Count: 1, Timeout: PT15M }
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          packages: { yum: { httpd: [] } }
+          commands:
+            start: { command: systemctl enable --now httpd }
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: !If [IsProd, m7i.large, t3.micro]
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          dnf install -y aws-cfn-bootstrap
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource WebServer --region ${AWS::Region}
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource WebServer --region ${AWS::Region}
+Outputs:
+  VolumeId:
+    Value: !Ref DataVolume
+    Export: { Name: !Sub '${AWS::StackName}-VolumeId' }   # 他スタックから ImportValue で参照</code></pre>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>組み込み関数・機能</th><th>役割</th></tr></thead>
+      <tbody>
+        <tr><td><code>!Ref</code></td><td>パラメータの値、またはリソースの主識別子（多くは ID や名前）を返す</td></tr>
+        <tr><td><code>!GetAtt</code></td><td>リソースの属性（ARN、DNS 名など）を返す</td></tr>
+        <tr><td><code>!Sub</code> / <code>!Join</code></td><td>文字列の組み立て。<code>${AWS::Region}</code> などの擬似パラメータも埋め込める</td></tr>
+        <tr><td><code>!FindInMap</code></td><td>Mappings から値を引く（リージョン別の設定など）</td></tr>
+        <tr><td><code>!If</code> / <code>!Equals</code> / Conditions</td><td>環境ごとの作り分け</td></tr>
+        <tr><td><code>!ImportValue</code></td><td>他スタックが Export した値を参照（クロススタック参照）</td></tr>
+        <tr><td><code>!GetAZs</code> / <code>!Select</code> / <code>!Cidr</code></td><td>AZ 一覧の取得、リスト要素の選択、サブネット CIDR の計算</td></tr>
+        <tr><td>動的参照</td><td><code>{{resolve:ssm:/path}}</code>、<code>{{resolve:secretsmanager:id:SecretString:password}}</code> でテンプレートに秘密情報を書かずに参照</td></tr>
+        <tr><td>擬似パラメータ</td><td><code>AWS::Region</code>・<code>AWS::AccountId</code>・<code>AWS::StackName</code>・<code>AWS::NoValue</code> など</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <h4>ブートストラップと待機の仕組み</h4>
+    <dl class="kv">
+      <dt>cfn-init</dt><dd><code>AWS::CloudFormation::Init</code> メタデータに書いたパッケージ・ファイル・コマンド・サービスを適用。</dd>
+      <dt>cfn-signal</dt><dd>初期化の成否を CloudFormation に通知。<code>CreationPolicy</code>（または WaitCondition）と組み合わせ、<strong>アプリの準備完了まで CREATE_COMPLETE にしない</strong>。タイムアウトまでシグナルが来なければ失敗してロールバック。</dd>
+      <dt>cfn-hup</dt><dd>メタデータの変更を検知して cfn-init を再実行する常駐デーモン。スタック更新をインスタンス内の設定に反映。</dd>
+      <dt>UpdatePolicy</dt><dd>ASG を更新するときの方式：<code>AutoScalingRollingUpdate</code>（バッチで置き換え）、<code>AutoScalingReplacingUpdate</code>（新しい ASG を作って切り替え）。</dd>
+      <dt>DependsOn</dt><dd>参照関係がないリソース間に作成順序を明示（例：IGW のアタッチ後にルートを作成）。</dd>
+    </dl>
+    <h4>スタックの分割</h4>
+    <div class="grid2">
+      <div class="card"><span class="tag">親子関係</span><h5>ネストされたスタック</h5><p>親テンプレートの <code>AWS::CloudFormation::Stack</code> で子テンプレートを呼び出す。共通部品（VPC、ALB など）の再利用。<strong>親から一括で更新・削除</strong>されるライフサイクルの一体性がある。</p></div>
+      <div class="card"><span class="tag">独立した参照</span><h5>クロススタック参照</h5><p>Outputs の <code>Export</code> と <code>!ImportValue</code>。ネットワークチームとアプリチームのように独立して管理するスタック間で値を共有。<strong>参照されている Export は変更・削除できない</strong>ため、参照側を先に変更する。</p></div>
+    </div>
+  </section>
+
+  <!-- ===== CFN ops ===== -->
+  <section class="sec" id="d3-cfn-ops">
+    <h3>変更セット・ドリフト検出・保護機能 <span class="sk">3.1.2</span></h3>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>機能</th><th>目的</th><th>要点</th></tr></thead>
+      <tbody>
+        <tr><td>変更セット（Change Set）</td><td>更新を実行する前に、何が追加・変更・<strong>置換（Replacement）</strong>・削除されるかを確認</td><td>本番更新の前に必ず作る。置換は「新しいリソースを作って古いものを消す」なのでデータを失う可能性がある（RDS のエンジン変更など）</td></tr>
+        <tr><td>ドリフト検出</td><td>コンソールや CLI で手動変更され、テンプレートと実リソースがずれていないか検出</td><td>状態は <code>IN_SYNC</code>・<code>MODIFIED</code>・<code>DELETED</code>・<code>NOT_CHECKED</code>。検出するだけで自動修正はしない（テンプレートを直すか、リソースを戻す）</td></tr>
+        <tr><td>スタックポリシー</td><td>スタック更新で特定のリソースが変更・置換されるのを防ぐ JSON ポリシー</td><td>一度設定すると既定で全リソースが保護される。更新時に一時的なポリシーで上書き可能</td></tr>
+        <tr><td>削除保護（Termination Protection）</td><td>スタックの誤削除を防ぐ</td><td>ネストされたスタックでは親の設定に従う</td></tr>
+        <tr><td><code>DeletionPolicy</code></td><td>スタック削除時やリソース削除時の扱い</td><td><code>Delete</code>（既定）・<code>Retain</code>（残す）・<code>RetainExceptOnCreate</code>・<code>Snapshot</code>（EBS・RDS・ElastiCache・Redshift など対応リソースのみ）</td></tr>
+        <tr><td><code>UpdateReplacePolicy</code></td><td>更新で置換が起きたときの旧リソースの扱い</td><td>DeletionPolicy と同じ値。データを持つリソースには両方指定するのが安全</td></tr>
+        <tr><td>ロールバックトリガー</td><td>作成・更新中や直後に指定した CloudWatch アラームが ALARM になったら自動でロールバック</td><td>監視期間（0〜180 分）を設定</td></tr>
+        <tr><td>IaC ジェネレーター／リソースのインポート</td><td>手作業で作った既存リソースをテンプレート化・スタックへ取り込む</td><td>インポート対象には DeletionPolicy の指定が必要</td></tr>
+        <tr><td>CloudFormation Hooks／Guard</td><td>デプロイ前にテンプレートやリソース設定を検査し、ポリシー違反を止める</td><td>プロアクティブなコンプライアンス（Control Tower のプロアクティブコントロールもこれ）</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout lab mt">
+      <span class="lbl">ハンズオン（リポジトリ Week 2）</span>
+      <p>ToDo アプリのスタックで、DynamoDB テーブルの読み書き設定を変える変更セットを作り、内容を確認してから実行します。次にコンソールでテーブルのタグを手で変更し、ドリフト検出で <code>MODIFIED</code> になることを確かめます。テンプレート保存時には <code>cfn-lint iac/cloudformation/wk2-*.yaml</code> を実行し、最後に <code>aws cloudformation delete-stack</code> で削除します。</p>
+    </div>
+  </section>
+
+  <!-- ===== CFN trouble ===== -->
+  <section class="sec" id="d3-cfn-trouble">
+    <h3>デプロイ失敗の特定と修復 <span class="sk">3.1.3</span></h3>
+    <figure class="fig">
+      <div class="canvas">
+      <svg viewBox="0 0 900 330" role="img" aria-label="スタックの状態遷移。作成失敗はROLLBACK_COMPLETEになり削除しかできない。更新失敗はUPDATE_ROLLBACK_COMPLETEに戻るが、ロールバックも失敗するとUPDATE_ROLLBACK_FAILEDになり、continue-update-rollbackで再開する">
+        <defs><marker id="a-cfn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker>
+        <marker id="a-cfn-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-hb" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <text class="s-tm" x="20" y="22">作成</text>
+        <rect class="s-box" x="20" y="34" width="200" height="40" rx="5"/><text class="s-mono" x="120" y="59" text-anchor="middle">CREATE_IN_PROGRESS</text>
+        <rect class="s-good" x="290" y="34" width="190" height="40" rx="5"/><text class="s-mono" x="385" y="59" text-anchor="middle">CREATE_COMPLETE</text>
+        <rect class="s-bad" x="20" y="110" width="200" height="40" rx="5"/><text class="s-mono" x="120" y="135" text-anchor="middle">ROLLBACK_IN_PROGRESS</text>
+        <rect class="s-bad" x="290" y="110" width="190" height="40" rx="5"/><text class="s-mono" x="385" y="135" text-anchor="middle">ROLLBACK_COMPLETE</text>
+        <line class="s-l" x1="220" y1="54" x2="286" y2="54" marker-end="url(#a-cfn)"/>
+        <line class="s-lb" x1="120" y1="74" x2="120" y2="106" marker-end="url(#a-cfn-b)"/><text class="s-ts" x="128" y="94">リソース作成失敗</text>
+        <line class="s-l" x1="220" y1="130" x2="286" y2="130" marker-end="url(#a-cfn)"/>
+        <text class="s-ts" x="500" y="126">削除して作り直すしかない</text><text class="s-ts" x="500" y="142">（更新は不可）</text>
+        <text class="s-tm" x="20" y="194">更新</text>
+        <rect class="s-box" x="20" y="206" width="200" height="40" rx="5"/><text class="s-mono" x="120" y="231" text-anchor="middle">UPDATE_IN_PROGRESS</text>
+        <rect class="s-good" x="290" y="206" width="190" height="40" rx="5"/><text class="s-mono" x="385" y="231" text-anchor="middle">UPDATE_COMPLETE</text>
+        <rect class="s-box2" x="20" y="280" width="250" height="40" rx="5"/><text class="s-mono" x="145" y="305" text-anchor="middle">UPDATE_ROLLBACK_IN_PROGRESS</text>
+        <rect class="s-good" x="330" y="280" width="250" height="40" rx="5"/><text class="s-mono" x="455" y="305" text-anchor="middle">UPDATE_ROLLBACK_COMPLETE</text>
+        <rect class="s-bad" x="640" y="200" width="240" height="52" rx="5"/><text class="s-mono" x="760" y="224" text-anchor="middle">UPDATE_ROLLBACK_FAILED</text><text class="s-ts" x="760" y="242" text-anchor="middle">手動変更などで戻せない</text>
+        <line class="s-l" x1="220" y1="226" x2="286" y2="226" marker-end="url(#a-cfn)"/>
+        <line class="s-lb" x1="120" y1="246" x2="120" y2="276" marker-end="url(#a-cfn-b)"/>
+        <line class="s-l" x1="270" y1="300" x2="326" y2="300" marker-end="url(#a-cfn)"/><text class="s-ts" x="298" y="292" text-anchor="middle">戻せた</text>
+        <path class="s-lb" d="M240 280 C 400 250, 560 240, 636 232" marker-end="url(#a-cfn-b)"/>
+        <path class="s-l s-dash" d="M760 252 V300 H584" marker-end="url(#a-cfn)"/>
+        <text class="s-ts" x="752" y="274" text-anchor="end">continue-update-rollback</text><text class="s-ts" x="752" y="290" text-anchor="end">（--resources-to-skip）</text>
+      </svg>
+      </div>
+      <figcaption><b>スタックの主な状態遷移。</b><code>ROLLBACK_COMPLETE</code> は「作成に失敗して片付いた」状態で、削除して作り直します。<code>UPDATE_ROLLBACK_FAILED</code> は原因（手動で消されたリソースなど）を直すか、そのリソースをスキップして <code>continue-update-rollback</code> を実行します。</figcaption>
+    </figure>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>症状・エラー</th><th>原因</th><th>対処</th></tr></thead>
+      <tbody>
+        <tr><td><code>CREATE_FAILED</code>：API: ... is not authorized / AccessDenied</td><td>スタックを実行する IAM（またはサービスロール）の権限不足。<code>iam:PassRole</code> の不足、SCP による拒否、KMS キーポリシー</td><td>イベントタブでリソースごとの理由を確認。サービスロールに必要な権限を追加。CloudTrail で拒否された API を特定</td></tr>
+        <tr><td><code>Requires capabilities: [CAPABILITY_NAMED_IAM]</code></td><td>IAM リソースを作るテンプレートで承認が未指定</td><td><code>--capabilities CAPABILITY_IAM</code>（名前付きなら <code>CAPABILITY_NAMED_IAM</code>、マクロ展開は <code>CAPABILITY_AUTO_EXPAND</code>）</td></tr>
+        <tr><td>... already exists</td><td>名前を固定したリソース（S3 バケット名、IAM ロール名など）が既に存在</td><td>名前を指定せず自動生成させる、または既存リソースをインポート</td></tr>
+        <tr><td>LimitExceeded / クォータ超過</td><td>VPC 数、Elastic IP 数などの上限</td><td>Service Quotas で引き上げ申請、不要リソースの削除</td></tr>
+        <tr><td>サブネットで IP が足りない</td><td>サブネットが小さすぎる。<strong>AWS は各サブネットで 5 つの IP を予約</strong>（/28 なら使えるのは 11 個）</td><td>大きなサブネット、CIDR の追加。作成済みサブネットの CIDR は変更できない</td></tr>
+        <tr><td>カスタムリソースで 1 時間止まる</td><td>Lambda が CloudFormation の署名付き URL へ応答を返していない</td><td>例外時も必ず応答を返す実装（<code>cfnresponse</code>）。タイムアウト設定</td></tr>
+        <tr><td><code>DELETE_FAILED</code></td><td>中身が残っている S3 バケット、他スタックが Import している Export、スタック外で作られた依存リソース（手動で追加した ENI など）</td><td>中身を空にする、参照側スタックを先に変更、依存を外してから再削除。残したいリソースは保持（retain）を指定して削除</td></tr>
+        <tr><td>No updates are to be performed</td><td>テンプレートとパラメータに差分がない</td><td>エラーではない。ドリフトしているなら別途対応</td></tr>
+        <tr><td>Export ... cannot be updated as it is in use</td><td>参照中の Export を変更しようとした</td><td>参照しているスタックを先に変更</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout tip mt">
+      <span class="lbl">試験の着眼点：失敗時の調査を楽にする</span>
+      <ul>
+        <li>作成失敗時に原因を調べたいので、作ったリソースを残したい → <code>--disable-rollback</code>（<code>--on-failure DO_NOTHING</code>）、または「正常にプロビジョニングされたリソースを保持」オプション。</li>
+        <li>テンプレートの構文チェックは <code>aws cloudformation validate-template</code> と <code>cfn-lint</code>（このリポジトリでは保存時に自動実行）。</li>
+        <li>権限を最小にしたまま利用者にスタック操作をさせたい → <strong>サービスロール</strong>を CloudFormation に渡し、利用者には <code>iam:PassRole</code> とスタック操作権限だけを与える。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== CDK ===== -->
+  <section class="sec" id="d3-cdk">
+    <h3>AWS CDK <span class="sk">3.1.2</span></h3>
+    <div class="prose">
+      <p>CDK はプログラミング言語（Python・TypeScript など）でインフラを定義し、<strong>CloudFormation テンプレートを生成（synth）してデプロイ</strong>するフレームワークです。最終的には CloudFormation のスタックになるので、スタックの状態やエラーの考え方はそのまま使えます。</p>
+    </div>
+<pre class="mt"><code>from aws_cdk import App, Stack, RemovalPolicy, Tags, aws_dynamodb as dynamodb
+from constructs import Construct
+
+
+class TodoDataStack(Stack):
+    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+        super().__init__(scope, construct_id, **kwargs)
+        dynamodb.Table(
+            self, "TodoTable",
+            partition_key=dynamodb.Attribute(name="id", type=dynamodb.AttributeType.STRING),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            point_in_time_recovery=True,
+            removal_policy=RemovalPolicy.DESTROY,  # 学習用。本番は RETAIN
+        )
+        Tags.of(self).add("Project", "soa-c03-workbook")
+
+
+app = App()
+TodoDataStack(app, "wk2-todo-data", env={"region": "ap-northeast-1"})
+app.synth()</code></pre>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>用語・コマンド</th><th>意味</th></tr></thead>
+      <tbody>
+        <tr><td>コンストラクト L1</td><td><code>CfnBucket</code> のような CloudFormation リソースと 1 対 1 の低レベル部品</td></tr>
+        <tr><td>コンストラクト L2</td><td>既定値やヘルパーメソッド（<code>grant_read</code> など）を持つ高レベル部品</td></tr>
+        <tr><td>コンストラクト L3（パターン）</td><td>ALB＋Fargate サービスなど複数リソースの組み合わせ</td></tr>
+        <tr><td><code>cdk bootstrap</code></td><td>デプロイに必要な資材用 S3 バケット・ECR リポジトリ・IAM ロール（<code>CDKToolkit</code> スタック）を<strong>アカウント×リージョンごと</strong>に一度作成。未実施だとデプロイが失敗する</td></tr>
+        <tr><td><code>cdk synth</code></td><td>CloudFormation テンプレートを生成（<code>cdk.out</code>）</td></tr>
+        <tr><td><code>cdk diff</code></td><td>デプロイ済みスタックとの差分を表示（変更セットに相当する確認）</td></tr>
+        <tr><td><code>cdk deploy</code> / <code>cdk destroy</code></td><td>デプロイ／削除</td></tr>
+        <tr><td><code>RemovalPolicy</code></td><td>CloudFormation の DeletionPolicy に対応。ステートフルなリソースの既定は RETAIN</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <!-- ===== Multi account/region ===== -->
+  <section class="sec" id="d3-multi">
+    <h3>複数アカウント・リージョンへのプロビジョニングと共有 <span class="sk">3.1.4</span></h3>
+    <figure class="fig">
+      <div class="canvas">
+      <svg viewBox="0 0 900 250" role="img" aria-label="管理者アカウントのスタックセットが、対象アカウントとリージョンの組み合わせごとにスタックインスタンスを作る。サービスマネージドではOUに新しいアカウントが入ると自動で展開される">
+        <defs><marker id="a-ss" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <rect class="s-acc" x="20" y="80" width="200" height="90" rx="8"/><text class="s-tb" x="120" y="110" text-anchor="middle">管理者アカウント</text><text class="s-ts" x="120" y="132" text-anchor="middle">スタックセット</text><text class="s-ts" x="120" y="150" text-anchor="middle">（テンプレート＋設定）</text>
+        <rect class="s-zone" x="300" y="20" width="580" height="210" rx="8"/><text class="s-tm" x="314" y="40">対象 OU（サービスマネージドなら新規アカウントにも自動展開）</text>
+        <text class="s-tb" x="420" y="66" text-anchor="middle">アカウント A</text><text class="s-tb" x="600" y="66" text-anchor="middle">アカウント B</text><text class="s-tb" x="780" y="66" text-anchor="middle">アカウント C（新規）</text>
+        <rect class="s-good" x="350" y="80" width="140" height="40" rx="5"/><text class="s-t" x="420" y="105" text-anchor="middle">東京のスタック</text>
+        <rect class="s-good" x="350" y="140" width="140" height="40" rx="5"/><text class="s-t" x="420" y="165" text-anchor="middle">大阪のスタック</text>
+        <rect class="s-good" x="530" y="80" width="140" height="40" rx="5"/><text class="s-t" x="600" y="105" text-anchor="middle">東京のスタック</text>
+        <rect class="s-good" x="530" y="140" width="140" height="40" rx="5"/><text class="s-t" x="600" y="165" text-anchor="middle">大阪のスタック</text>
+        <rect class="s-good" x="710" y="80" width="140" height="40" rx="5"/><text class="s-t" x="780" y="105" text-anchor="middle">東京のスタック</text>
+        <rect class="s-good" x="710" y="140" width="140" height="40" rx="5"/><text class="s-t" x="780" y="165" text-anchor="middle">大阪のスタック</text>
+        <line class="s-l" x1="220" y1="110" x2="346" y2="100" marker-end="url(#a-ss)"/>
+        <line class="s-l" x1="220" y1="140" x2="346" y2="160" marker-end="url(#a-ss)"/>
+        <text class="s-ts" x="590" y="214" text-anchor="middle">スタックインスタンス＝アカウント×リージョン（最大同時実行数・障害許容数で展開速度を制御）</text>
+      </svg>
+      </div>
+      <figcaption><b>CloudFormation StackSets。</b>Config ルール、CloudTrail、IAM ロール、ガードレール用のリソースなど、全アカウント共通の基盤を 1 回の操作で配ります。</figcaption>
+    </figure>
+    <div class="grid2 mt">
+      <div class="card"><span class="tag">self-managed</span><h5>セルフマネージド権限</h5><p>管理者アカウントに <code>AWSCloudFormationStackSetAdministrationRole</code>、各対象アカウントに <code>AWSCloudFormationStackSetExecutionRole</code> を自分で作り、信頼関係を設定。Organizations を使わない環境向け。</p></div>
+      <div class="card"><span class="tag">service-managed</span><h5>サービスマネージド権限</h5><p>Organizations と統合し、必要なロールは自動作成。<strong>OU を対象にでき、OU に追加された新しいアカウントへ自動展開</strong>（アカウントが OU から外れたら自動削除も選択可）。委任管理者アカウントから運用可能。</p></div>
+    </div>
+    <h4>AWS Resource Access Manager（RAM）</h4>
+    <div class="prose">
+      <p>RAM は、リソースを<strong>コピーせずに</strong>他のアカウントや組織・OU と共有する仕組みです。StackSets が「同じものを各アカウントに作る」のに対し、RAM は「1 つのものを皆で使う」点が違います。</p>
+    </div>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>よく共有するリソース</th><th>何ができるか</th></tr></thead>
+      <tbody>
+        <tr><td>VPC のサブネット（VPC 共有）</td><td>参加アカウントが所有者の VPC のサブネットに自分の EC2 や RDS を起動。ネットワークは一元管理、リソースは各アカウントで管理</td></tr>
+        <tr><td>Transit Gateway</td><td>各アカウントの VPC を共通のハブに接続</td></tr>
+        <tr><td>Route 53 Resolver ルール</td><td>オンプレミスへの DNS 転送ルールを全 VPC で共用</td></tr>
+        <tr><td>プレフィックスリスト、IPAM プール</td><td>許可する CIDR 一覧や IP アドレス空間の共有</td></tr>
+        <tr><td>License Manager の設定、キャパシティ予約、Aurora DB クラスター（クローン用）など</td><td>ライセンス管理、予約済みキャパシティの共用</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="prose mt">組織内で共有するときは、Organizations の管理アカウントで「AWS Organizations との共有を有効化」しておくと、招待の承認なしで共有できます。</p>
+  </section>
+
+  <!-- ===== Deploy strategies ===== -->
+  <section class="sec" id="d3-deploy">
+    <h3>デプロイ戦略とサービス <span class="sk">3.1.5</span></h3>
+    <figure class="fig">
+      <div class="canvas">
+      <svg viewBox="0 0 900 260" role="img" aria-label="ローリングは一部ずつ置き換え、ブルーグリーンは新環境を作ってトラフィックを一度に切り替え、カナリアはまず一部のトラフィックだけを新バージョンへ流す">
+        <text class="s-tb" x="20" y="30">一括（All at once）</text>
+        <g><rect class="f-muted" x="240" y="16" width="34" height="20" rx="3"/><rect class="f-muted" x="280" y="16" width="34" height="20" rx="3"/><rect class="f-muted" x="320" y="16" width="34" height="20" rx="3"/><rect class="f-muted" x="360" y="16" width="34" height="20" rx="3"/></g>
+        <text class="s-ts" x="420" y="31">→</text>
+        <g class="f-acc"><rect x="450" y="16" width="34" height="20" rx="3"/><rect x="490" y="16" width="34" height="20" rx="3"/><rect x="530" y="16" width="34" height="20" rx="3"/><rect x="570" y="16" width="34" height="20" rx="3"/></g>
+        <text class="s-ts" x="630" y="31">最速だが全台停止の時間がある</text>
+
+        <text class="s-tb" x="20" y="84">ローリング</text>
+        <g><rect class="f-acc" x="240" y="70" width="34" height="20" rx="3"/><rect class="f-muted" x="280" y="70" width="34" height="20" rx="3"/><rect class="f-muted" x="320" y="70" width="34" height="20" rx="3"/><rect class="f-muted" x="360" y="70" width="34" height="20" rx="3"/></g>
+        <text class="s-ts" x="420" y="85">→</text>
+        <g><rect class="f-acc" x="450" y="70" width="34" height="20" rx="3"/><rect class="f-acc" x="490" y="70" width="34" height="20" rx="3"/><rect class="f-muted" x="530" y="70" width="34" height="20" rx="3"/><rect class="f-muted" x="570" y="70" width="34" height="20" rx="3"/></g>
+        <text class="s-ts" x="630" y="85">一部ずつ。容量は一時的に減る</text>
+
+        <text class="s-tb" x="20" y="138">ブルー/グリーン</text>
+        <g><rect class="f-muted" x="240" y="124" width="34" height="20" rx="3"/><rect class="f-muted" x="280" y="124" width="34" height="20" rx="3"/></g>
+        <g class="f-acc"><rect x="320" y="124" width="34" height="20" rx="3"/><rect x="360" y="124" width="34" height="20" rx="3"/></g>
+        <text class="s-ts" x="420" y="139">→</text>
+        <g class="f-acc"><rect x="450" y="124" width="34" height="20" rx="3"/><rect x="490" y="124" width="34" height="20" rx="3"/></g>
+        <text class="s-ts" x="630" y="139">新環境を並行稼働し一気に切替</text>
+        <text class="s-tm" x="257" y="160" text-anchor="middle">旧</text><text class="s-tm" x="337" y="160" text-anchor="middle">新</text>
+
+        <text class="s-tb" x="20" y="200">カナリア／リニア</text>
+        <rect class="s-box2" x="240" y="186" width="154" height="20" rx="3"/><rect class="f-acc" x="240" y="186" width="16" height="20" rx="3"/>
+        <text class="s-ts" x="262" y="201">10%</text>
+        <text class="s-ts" x="420" y="201">→</text>
+        <rect class="f-acc" x="450" y="186" width="154" height="20" rx="3"/>
+        <text class="s-ts" x="630" y="201">少量で検証してから全量へ</text>
+        <text class="s-ts" x="20" y="240">いずれもアラームで異常を検知したら自動ロールバックできる構成にするのが運用上のベストプラクティス</text>
+      </svg>
+      </div>
+      <figcaption><b>主なデプロイ戦略。</b>灰色が旧バージョン、青が新バージョンです。ダウンタイムを避けつつ即時に戻したいならブルー/グリーン、影響範囲を絞って検証したいならカナリアを選びます。</figcaption>
+    </figure>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>対象</th><th>実装方法</th></tr></thead>
+      <tbody>
+        <tr><td>EC2 Auto Scaling</td><td>インスタンスの更新（ローリング、最小正常率、チェックポイント、自動ロールバック）、CloudFormation の UpdatePolicy、2 つの ASG と ALB の重み付きターゲットグループでブルー/グリーン</td></tr>
+        <tr><td>ECS</td><td>ローリング更新＋デプロイサーキットブレーカー、ネイティブのブルー/グリーン（テストトラフィック、ベイク時間）、CodeDeploy 連携</td></tr>
+        <tr><td>Lambda</td><td>バージョンとエイリアス。エイリアスの<strong>加重ルーティング</strong>で一部のトラフィックを新バージョンへ。CodeDeploy で <code>Canary10Percent5Minutes</code>・<code>Linear10PercentEvery1Minute</code> などを自動化</td></tr>
+        <tr><td>DNS レベル</td><td>Route 53 の加重ルーティングで旧・新環境の比率を変える（TTL の影響を受ける）</td></tr>
+        <tr><td>CodeDeploy（参考）</td><td>EC2／オンプレミスのインプレース（<code>OneAtATime</code>・<code>HalfAtATime</code>・<code>AllAtOnce</code>）とブルー/グリーン。アラームと連動した自動ロールバック。対象サービス一覧には明記されていないが、デプロイ戦略の文脈で登場しうる</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <!-- ===== Third-party ===== -->
+  <section class="sec" id="d3-3rd">
+    <h3>サードパーティツール：Terraform と Git <span class="sk">3.1.6</span></h3>
+    <div class="grid2">
+      <div class="card"><span class="tag">Terraform</span><h5>運用で押さえる点</h5><ul><li><strong>ステートファイル</strong>が実リソースとの対応表。チームで使うなら S3 のリモートバックエンドに置き、バージョニングと暗号化を有効化。同時実行を防ぐロックは S3 のネイティブロック（<code>use_lockfile</code>）または従来の DynamoDB テーブル。</li><li><code>terraform plan</code> は CloudFormation の変更セット、<code>plan</code> での差分検出はドリフト検出に相当。</li><li>既存リソースは <code>import</code> で管理下へ。</li><li>認証はアクセスキーを置かず、IAM ロールの引き受け（<code>assume_role</code>）や CI の OIDC フェデレーション。</li></ul></div>
+      <div class="card"><span class="tag">Git</span><h5>IaC とデプロイの自動化</h5><ul><li>テンプレートとアプリをリポジトリで管理し、プルリクエストでレビューしてからマージ → パイプラインがデプロイ。</li><li>GitHub Actions などから AWS へは <strong>OIDC ID プロバイダー＋IAM ロール</strong>で一時認証情報を取得（長期のアクセスキーを Secrets に置かない）。</li><li>CloudFormation の <strong>Git 同期</strong>で、リポジトリのテンプレート変更を自動でスタックに反映できる。</li><li>シークレットや <code>.env</code> はコミットしない（このリポジトリのフックでも検出）。</li></ul></div>
+    </div>
+    <div class="prose mt">
+      <p>Terraform と CloudFormation の対比：</p>
+    </div>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>観点</th><th>CloudFormation／CDK</th><th>Terraform</th></tr></thead>
+      <tbody>
+        <tr><td>状態の管理</td><td>AWS 側（スタック）が管理</td><td>ステートファイルを自分で管理</td></tr>
+        <tr><td>事前確認</td><td>変更セット、<code>cdk diff</code></td><td><code>terraform plan</code></td></tr>
+        <tr><td>失敗時</td><td>自動ロールバック</td><td>途中まで適用された状態で止まる（再度 apply）</td></tr>
+        <tr><td>複数アカウント展開</td><td>StackSets</td><td>プロバイダーのエイリアスやワークスペース、外部ツール</td></tr>
+        <tr><td>対象</td><td>AWS 中心</td><td>マルチクラウド・SaaS も</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <!-- ===== SSM ===== -->
+  <section class="sec" id="d3-ssm">
+    <h3>Systems Manager による運用自動化 <span class="sk">3.2.1</span></h3>
+    <figure class="fig">
+      <div class="canvas">
+      <svg viewBox="0 0 900 230" role="img" aria-label="マネージドノードになるには、SSM Agentが動いていて、IAMのインスタンスプロファイルがあり、ssm、ssmmessages、ec2messagesのエンドポイントへHTTPS 443で到達できる必要がある">
+        <defs><marker id="a-ssm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <rect class="s-zone" x="20" y="20" width="520" height="190" rx="8"/><text class="s-tm" x="34" y="40">プライベートサブネット</text>
+        <rect class="s-box2" x="40" y="60" width="200" height="130" rx="6"/><text class="s-tb" x="140" y="86" text-anchor="middle">EC2</text>
+        <rect class="s-good" x="56" y="100" width="168" height="30" rx="4"/><text class="s-t" x="140" y="120" text-anchor="middle">① SSM Agent 稼働</text>
+        <rect class="s-good" x="56" y="140" width="168" height="30" rx="4"/><text class="s-t" x="140" y="160" text-anchor="middle">② IAM ロール</text>
+        <rect class="s-acc" x="320" y="60" width="200" height="130" rx="6"/><text class="s-tb" x="420" y="86" text-anchor="middle">③ インターフェイス型</text><text class="s-tb" x="420" y="104" text-anchor="middle">VPC エンドポイント</text>
+        <text class="s-mono" x="420" y="130" text-anchor="middle">ssm</text><text class="s-mono" x="420" y="150" text-anchor="middle">ssmmessages</text><text class="s-mono" x="420" y="170" text-anchor="middle">ec2messages</text>
+        <line class="s-l" x1="240" y1="125" x2="316" y2="125" marker-end="url(#a-ssm)"/><text class="s-ts" x="278" y="116" text-anchor="middle">HTTPS 443</text>
+        <rect class="s-box" x="620" y="60" width="260" height="130" rx="6"/><text class="s-tb" x="750" y="90" text-anchor="middle">Systems Manager</text>
+        <text class="s-ts" x="750" y="114" text-anchor="middle">Session Manager・Run Command</text><text class="s-ts" x="750" y="134" text-anchor="middle">Patch Manager・State Manager</text><text class="s-ts" x="750" y="154" text-anchor="middle">Inventory・Automation</text>
+        <line class="s-l" x1="520" y1="125" x2="616" y2="125" marker-end="url(#a-ssm)"/>
+        <text class="s-ts" x="568" y="148" text-anchor="middle">または NAT</text>
+      </svg>
+      </div>
+      <figcaption><b>インスタンスが「マネージドノード」として表示される 3 条件。</b>①エージェント、②<code>AmazonSSMManagedInstanceCore</code> を含むインスタンスプロファイル（または Default Host Management Configuration）、③ SSM のエンドポイントへの経路。インターネットに出られないサブネットでは 3 つのインターフェイス型エンドポイント（private DNS 有効）が必要です。</figcaption>
+    </figure>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>機能</th><th>何をするか</th><th>選ぶ場面</th></tr></thead>
+      <tbody>
+        <tr><td>Session Manager</td><td>ブラウザや CLI からインスタンスのシェルへ接続。SSH ポートや踏み台、キーペアが不要。操作ログを S3／CloudWatch Logs に記録、KMS で暗号化。ポートフォワーディングも可</td><td>「インバウンドポートを開けずに安全に接続」「操作を監査」</td></tr>
+        <tr><td>Run Command</td><td>多数のインスタンスへ一斉にコマンドを実行（<code>AWS-RunShellScript</code>・<code>AWS-RunPowerShellScript</code> など）。同時実行数とエラーしきい値で制御、出力を S3 へ</td><td>単発の一括作業</td></tr>
+        <tr><td>State Manager</td><td>関連付け（Association）で「あるべき状態」を定期的に適用し続ける</td><td>エージェントの導入・設定の維持、新規インスタンスへの自動適用</td></tr>
+        <tr><td>Patch Manager</td><td>パッチベースラインに従ってスキャン・適用、コンプライアンスを報告</td><td>OS とアプリのパッチ管理（下記）</td></tr>
+        <tr><td>メンテナンスウィンドウ</td><td>業務影響の少ない時間帯にタスク（Run Command、Automation、Lambda、Step Functions）を実行</td><td>定期的なパッチ適用や再起動</td></tr>
+        <tr><td>Inventory</td><td>インストール済みソフト、ネットワーク設定、ファイルなどを収集。リソースデータの同期で S3 に集約し Athena で分析</td><td>ソフトウェア資産の把握</td></tr>
+        <tr><td>Parameter Store</td><td>設定値とシークレット（SecureString）を階層で保存（下記）</td><td>環境ごとの設定、AMI ID の参照</td></tr>
+        <tr><td>Automation</td><td>ランブックで AWS API を含む手順を実行（<a href="#d1-auto">第 1 章</a>）</td><td>AMI 作成、修復、複数手順の運用作業</td></tr>
+        <tr><td>Distributor</td><td>ソフトウェアパッケージを配布・インストール</td><td>エージェント類の配布</td></tr>
+        <tr><td>Fleet Manager</td><td>コンソールからファイル閲覧、プロセス・ユーザー管理、RDP 接続</td><td>GUI での個別管理</td></tr>
+        <tr><td>OpsCenter</td><td>運用上の問題を OpsItem として集約し、関連情報とランブックを紐付け</td><td>アラームや Config の問題を調査・対応</td></tr>
+        <tr><td>Quick Setup</td><td>推奨設定（パッチポリシー、DHMC、エージェントの更新など）を組織全体へ一括展開</td><td>複数アカウント・リージョンの初期設定</td></tr>
+        <tr><td>ハイブリッドアクティベーション</td><td>オンプレミスのサーバーをマネージドノード（ID が <code>mi-</code>）として登録</td><td>ハイブリッド環境の一元管理</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <h4>Patch Manager の構成</h4>
+    <dl class="kv">
+      <dt>パッチベースライン</dt><dd>どのパッチを承認するかのルール。分類（Security、Bugfix）や重要度（Critical、Important）ごとに「リリース後 N 日で自動承認」。特定パッチの承認／拒否リスト。OS ごとに定義済みベースラインがあり、カスタムも作れる。</dd>
+      <dt>パッチポリシー（推奨）</dt><dd>Quick Setup で組織全体・OU・アカウント／リージョン単位にスキャンとインストールのスケジュールを一括定義。</dd>
+      <dt>パッチグループ</dt><dd>従来方式。タグ <code>Patch Group</code>（または <code>PatchGroup</code>）でインスタンスをベースラインに対応付ける。</dd>
+      <dt>AWS-RunPatchBaseline</dt><dd>実際にスキャン（Scan）や適用（Install）を行う Command ドキュメント。メンテナンスウィンドウや State Manager から実行。</dd>
+      <dt>Patch now</dt><dd>スケジュールを待たずに即時スキャン・適用。緊急の脆弱性対応。</dd>
+      <dt>コンプライアンス</dt><dd>不足パッチのある非準拠ノードを一覧。S3 へ CSV でエクスポートして分析。</dd>
+    </dl>
+    <div class="callout pdf mt">
+      <span class="lbl">演習 PDF の論点（問題 15）</span>
+      <p>EC2 フリートのセキュリティパッチを厳格に管理 → <strong>Systems Manager Patch Manager</strong>。AWS Batch はバッチ計算、EC2Rescue は接続・起動トラブルの調査用で、「AWS パッチマネージャー」という単独サービスは存在しません。</p>
+    </div>
+    <h4>Parameter Store の階層と層</h4>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>項目</th><th>Standard</th><th>Advanced</th></tr></thead>
+      <tbody>
+        <tr><td>値の最大サイズ</td><td>4 KB</td><td>8 KB</td></tr>
+        <tr><td>パラメータ数の上限</td><td>アカウント・リージョンごとに 10,000</td><td>より多く作成可能</td></tr>
+        <tr><td>パラメータポリシー（有効期限、期限前通知）</td><td class="no">なし</td><td class="yes">あり</td></tr>
+        <tr><td>料金</td><td>保存は無料（高スループット設定時は API 料金）</td><td>パラメータごとに月額</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="prose mt">型は <code>String</code>・<code>StringList</code>・<code>SecureString</code>（KMS で暗号化）。<code>/todo/prod/db/endpoint</code> のような階層名にすると、<code>GetParametersByPath</code> と IAM のパス条件で環境ごとにまとめて取得・制御できます。値を更新するとバージョンが増え、ラベルで特定バージョンを指せます。<strong>自動ローテーションが必要なシークレットは Secrets Manager</strong>（<a href="#d4-secrets">第 4 章</a>）。</p>
+  </section>
+
+  <!-- ===== Event driven ===== -->
+  <section class="sec" id="d3-event">
+    <h3>イベント駆動型のオートメーション <span class="sk">3.2.2</span></h3>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>イベント源</th><th>配信方法</th><th>押さえる点</th></tr></thead>
+      <tbody>
+        <tr><td>S3 イベント通知</td><td>SNS・SQS・Lambda に直接、または <strong>EventBridge</strong> に送信</td><td><code>s3:ObjectCreated:*</code>・<code>s3:ObjectRemoved:*</code>・復元・レプリケーション・ライフサイクルなど。プレフィックス／サフィックスでフィルター。直接送信では同じイベントタイプで重複するプレフィックスの設定は不可。送信先のリソースポリシーで S3 を許可。EventBridge に送ると高度なフィルターや複数ターゲットが使える</td></tr>
+        <tr><td>EventBridge ルール</td><td>AWS サービスイベント、CloudTrail の API 呼び出し、スケジュール</td><td>EC2 の状態変化、Health、Config のコンプライアンス変化、GuardDuty の検出結果、ECS タスクの停止など。<a href="#d1-eb">第 1 章</a>参照</td></tr>
+        <tr><td>Lambda の非同期呼び出し</td><td>S3・SNS・EventBridge から</td><td>失敗時は既定で 2 回まで再試行。<strong>失敗時の送信先（on-failure destination）</strong>や DLQ で取りこぼしを防ぐ</td></tr>
+        <tr><td>SQS（イベントソースマッピング）</td><td>Lambda がキューをポーリング</td><td>可視性タイムアウトは関数のタイムアウトより十分長く（目安 6 倍）。処理失敗が続くメッセージは <code>maxReceiveCount</code> を超えると DLQ へ</td></tr>
+        <tr><td>Step Functions</td><td>EventBridge のターゲットなど</td><td>複数手順の処理を再試行・分岐・待機・人の承認つきでオーケストレーション</td></tr>
+        <tr><td>AWS DevOps Agent</td><td>アラームや EventBridge のイベントを契機に調査を開始</td><td>v1.1 で追加。自動修復そのものより「調査と提案」を自動化する位置づけ</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <h4>代表的な自動化パターン</h4>
+    <ol class="ladder mt">
+      <li><div><span class="q">アップロードを契機に処理</span><p class="a">S3 に画像が置かれる → イベント通知 → Lambda がサムネイルを作る → 別プレフィックスに保存（同じプレフィックスに書くと無限ループになるので注意）。</p></div></li>
+      <li><div><span class="q">危険な設定変更を自動で戻す</span><p class="a">CloudTrail の <code>AuthorizeSecurityGroupIngress</code> → EventBridge ルール（0.0.0.0/0 の 22 番を検出）→ Lambda で <code>RevokeSecurityGroupIngress</code> → SNS で通知。</p></div></li>
+      <li><div><span class="q">非準拠リソースを修復</span><p class="a">Config ルール（例 <code>s3-bucket-server-side-encryption-enabled</code>）→ 自動修復で SSM Automation を実行。</p></div></li>
+      <li><div><span class="q">定期的な後片付け</span><p class="a">EventBridge Scheduler → Lambda が古いスナップショットや未使用の EBS を削除（もちろん DLM や AWS Backup のライフサイクルで済むならそちらが先）。</p></div></li>
+      <li><div><span class="q">停止・終了を通知</span><p class="a">EC2 の状態変化イベント → EventBridge → SNS（入力トランスフォーマーで読みやすい文面に）。</p></div></li>
+    </ol>
+  </section>
+</section>

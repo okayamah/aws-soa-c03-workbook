@@ -1,0 +1,435 @@
+
+<!-- ================= Chapter 4 ================= -->
+<section class="chapter" id="d4">
+  <div class="chapter-head">
+    <span class="num"><span class="dot d4"></span>CONTENT DOMAIN 4 · TASK 4.1 / 4.2</span>
+    <h2>セキュリティとコンプライアンス</h2>
+    <div class="meta"><span class="weight">採点対象の 16%</span><span class="weight">約 8 問</span></div>
+  </div>
+  <div class="prose">
+    <p>運用者の視点のセキュリティです。要件を「定義する」のは対象外で、問われるのは<strong>既存の要件を IAM・Organizations・Config・KMS などで実装し、アクセス拒否や検出結果を調べて直す</strong>ことです。ポリシーの評価順序と、各セキュリティサービスが何を検出するかの区別が得点源です。</p>
+  </div>
+
+  <!-- ===== IAM ===== -->
+  <section class="sec" id="d4-iam">
+    <h3>IAM の機能 <span class="sk">4.1.1</span></h3>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>機能</th><th>要点</th></tr></thead>
+      <tbody>
+        <tr><td>パスワードポリシー</td><td>アカウント単位で IAM ユーザーのパスワード要件（最小長、文字種、有効期限、再利用禁止、期限切れ時の管理者リセット要否）を設定。ルートユーザーには適用されない</td></tr>
+        <tr><td>MFA</td><td>仮想 MFA、パスキー／FIDO2 セキュリティキー、ハードウェア TOTP。ルートユーザーには必須。ポリシーで <code>aws:MultiFactorAuthPresent</code>（MFA 済みか）・<code>aws:MultiFactorAuthAge</code>（何秒前に認証したか）を条件にできる</td></tr>
+        <tr><td>ロール</td><td>一時的な認証情報を発行する ID。<strong>信頼ポリシー</strong>（誰が引き受けられるか）と<strong>権限ポリシー</strong>（何ができるか）の 2 つで構成。EC2 にはインスタンスプロファイル経由で渡す。セッションの既定は 1 時間、最大 12 時間（ロールの連鎖は 1 時間まで）</td></tr>
+        <tr><td>外部 ID</td><td>サードパーティにロールを引き受けさせるとき、信頼ポリシーの条件 <code>sts:ExternalId</code> で「混乱した代理」問題を防ぐ</td></tr>
+        <tr><td>フェデレーション</td><td>SAML 2.0（社内 IdP）、OIDC（GitHub Actions、ウェブ ID）。複数アカウントへの人のアクセスは <strong>IAM Identity Center</strong> が推奨</td></tr>
+        <tr><td>リソースベースのポリシー</td><td>S3 バケットポリシー、KMS キーポリシー、SQS／SNS のアクセスポリシー、Lambda の関数ポリシーなど。<code>Principal</code> を指定し、<strong>クロスアカウントのアクセス</strong>を許可できる</td></tr>
+        <tr><td>アクセス許可の境界</td><td>ユーザー／ロールに付けられる権限の<strong>上限</strong>。開発者に IAM ロール作成を任せつつ、自分より強い権限を作らせない用途</td></tr>
+        <tr><td>条件キー</td><td><code>aws:SourceIp</code>・<code>aws:RequestedRegion</code>・<code>aws:PrincipalOrgID</code>・<code>aws:SecureTransport</code>・<code>aws:SourceVpce</code>・<code>aws:ResourceTag</code>／<code>aws:RequestTag</code>／<code>aws:PrincipalTag</code>（ABAC）・<code>kms:ViaService</code> など</td></tr>
+        <tr><td>認証情報レポート／最終アクセス情報</td><td>全ユーザーのパスワード・アクセスキー・MFA の状態を CSV で取得。サービスごとの最終アクセス日時から不要な権限を削る</td></tr>
+      </tbody>
+    </table>
+    </div>
+<pre class="mt"><code>// ロールの信頼ポリシー：別アカウントの運用ツールに外部 ID 付きで引き受けを許可
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": { "AWS": "arn:aws:iam::444455556666:root" },
+    "Action": "sts:AssumeRole",
+    "Condition": { "StringEquals": { "sts:ExternalId": "ops-tool-7f3a" } }
+  }]
+}</code></pre>
+  </section>
+
+  <!-- ===== Evaluation ===== -->
+  <section class="sec" id="d4-eval">
+    <h3>ポリシー評価ロジック <span class="sk">4.1.1</span> <span class="sk">4.1.3</span></h3>
+    <figure class="fig">
+      <div class="canvas">
+      <svg viewBox="0 0 900 400" role="img" aria-label="明示的な拒否があれば拒否。SCPやRCPが許可しなければ拒否。リソースベースポリシーで許可されれば許可。アイデンティティベースポリシー、権限境界、セッションポリシーのすべてが許可すれば許可。どれかが許可しなければ暗黙の拒否">
+        <defs><marker id="a-ev" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker>
+        <marker id="a-ev-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-hb" d="M0 0 L10 5 L0 10 z"/></marker>
+        <marker id="a-ev-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-hg" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <rect class="s-box2" x="230" y="10" width="300" height="34" rx="5"/><text class="s-tb" x="380" y="32" text-anchor="middle">リクエスト（既定は暗黙の拒否）</text>
+        <rect class="s-box" x="230" y="64" width="300" height="40" rx="5"/><text class="s-t" x="380" y="89" text-anchor="middle">① どこかに明示的な Deny がある？</text>
+        <rect class="s-box" x="230" y="124" width="300" height="40" rx="5"/><text class="s-t" x="380" y="149" text-anchor="middle">② SCP・RCP が許可している？</text>
+        <rect class="s-box" x="230" y="184" width="300" height="40" rx="5"/><text class="s-t" x="380" y="209" text-anchor="middle">③ リソースベースポリシーが許可？</text>
+        <rect class="s-box" x="230" y="244" width="300" height="40" rx="5"/><text class="s-t" x="380" y="269" text-anchor="middle">④ アイデンティティベースが許可？</text>
+        <rect class="s-box" x="230" y="304" width="300" height="40" rx="5"/><text class="s-t" x="380" y="329" text-anchor="middle">⑤ 権限境界・セッションポリシーも許可？</text>
+        <line class="s-l" x1="380" y1="44" x2="380" y2="60" marker-end="url(#a-ev)"/>
+        <line class="s-l" x1="380" y1="104" x2="380" y2="120" marker-end="url(#a-ev)"/><text class="s-ts" x="388" y="117">いいえ</text>
+        <line class="s-l" x1="380" y1="164" x2="380" y2="180" marker-end="url(#a-ev)"/><text class="s-ts" x="388" y="177">はい</text>
+        <line class="s-l" x1="380" y1="224" x2="380" y2="240" marker-end="url(#a-ev)"/><text class="s-ts" x="388" y="237">いいえ</text>
+        <line class="s-l" x1="380" y1="284" x2="380" y2="300" marker-end="url(#a-ev)"/><text class="s-ts" x="388" y="297">はい</text>
+        <rect class="s-bad" x="640" y="64" width="230" height="40" rx="5"/><text class="s-tb" x="755" y="89" text-anchor="middle">拒否（何にも覆せない）</text>
+        <rect class="s-bad" x="640" y="124" width="230" height="40" rx="5"/><text class="s-tb" x="755" y="149" text-anchor="middle">拒否</text>
+        <rect class="s-good" x="20" y="184" width="170" height="40" rx="5"/><text class="s-tb" x="105" y="209" text-anchor="middle">許可</text>
+        <rect class="s-bad" x="640" y="244" width="230" height="40" rx="5"/><text class="s-tb" x="755" y="269" text-anchor="middle">暗黙の拒否</text>
+        <rect class="s-good" x="230" y="364" width="300" height="30" rx="5"/><text class="s-tb" x="380" y="384" text-anchor="middle">許可</text>
+        <rect class="s-bad" x="640" y="304" width="230" height="40" rx="5"/><text class="s-tb" x="755" y="329" text-anchor="middle">暗黙の拒否</text>
+        <line class="s-lb" x1="530" y1="84" x2="636" y2="84" marker-end="url(#a-ev-b)"/><text class="s-ts" x="583" y="76" text-anchor="middle">はい</text>
+        <line class="s-lb" x1="530" y1="144" x2="636" y2="144" marker-end="url(#a-ev-b)"/><text class="s-ts" x="583" y="136" text-anchor="middle">いいえ</text>
+        <line class="s-lg" x1="230" y1="204" x2="194" y2="204" marker-end="url(#a-ev-g)"/><text class="s-ts" x="212" y="196" text-anchor="middle">はい</text>
+        <line class="s-lb" x1="530" y1="264" x2="636" y2="264" marker-end="url(#a-ev-b)"/><text class="s-ts" x="583" y="256" text-anchor="middle">いいえ</text>
+        <line class="s-lb" x1="530" y1="324" x2="636" y2="324" marker-end="url(#a-ev-b)"/><text class="s-ts" x="583" y="316" text-anchor="middle">いいえ</text>
+        <line class="s-lg" x1="380" y1="344" x2="380" y2="360" marker-end="url(#a-ev-g)"/><text class="s-ts" x="388" y="357">はい</text>
+        <text class="s-tm" x="20" y="250">同一アカウント内の</text><text class="s-tm" x="20" y="266">簡略化した流れ</text>
+      </svg>
+      </div>
+      <figcaption><b>同一アカウント内のリクエストの評価順序（簡略版）。</b>明示的な拒否は常に優先されます。SCP／RCP は許可を「与えない」上限の仕組みで、許可しない限り他で許可しても拒否されます。<strong>クロスアカウント</strong>では、呼び出し側アカウントのアイデンティティベースポリシーと、相手側のリソースベースポリシーの<strong>両方</strong>で許可が必要です。</figcaption>
+    </figure>
+    <div class="callout trap mt">
+      <span class="lbl">ひっかけ注意</span>
+      <ul>
+        <li>SCP は<strong>管理アカウントには効かず</strong>、サービスにリンクされたロールにも効きません。メンバーアカウントのルートユーザーには効きます。</li>
+        <li>SCP で許可（Allow）を書いても権限は付与されません。各アカウントの IAM ポリシーで許可が必要です。</li>
+        <li>KMS キーは<strong>キーポリシーが主役</strong>です。キーポリシーがアカウント（<code>arn:aws:iam::ACCOUNT:root</code>）を信頼していない限り、IAM ポリシーで <code>kms:*</code> を許可しても使えません。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== IAM troubleshooting ===== -->
+  <section class="sec" id="d4-iamtrouble">
+    <h3>アクセス問題の調査と監査 <span class="sk">4.1.2</span></h3>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>ツール</th><th>分かること</th><th>使う場面</th></tr></thead>
+      <tbody>
+        <tr><td>CloudTrail</td><td>拒否された API（<code>errorCode</code> が <code>AccessDenied</code>・<code>UnauthorizedOperation</code>）、呼び出したプリンシパル、送信元 IP</td><td>「誰の、どの操作が、いつ拒否されたか」を特定</td></tr>
+        <tr><td>エラーメッセージ</td><td>拒否の原因となったポリシーの種類（SCP、権限境界、リソースベースなど）が表示される</td><td>どの層で拒否されたかの切り分け</td></tr>
+        <tr><td><code>aws sts decode-authorization-message</code></td><td>EC2 などが返す「Encoded authorization failure message」を復号し、評価の詳細を表示</td><td>EC2 の起動失敗などで理由が暗号化されているとき（<code>sts:DecodeAuthorizationMessage</code> 権限が必要）</td></tr>
+        <tr><td>IAM Policy Simulator</td><td>ユーザー・ロールのポリシーで特定の操作が許可されるかをシミュレート（SCP の影響も反映）</td><td>ポリシーを本番適用する前の検証、拒否原因の再現</td></tr>
+        <tr><td>IAM Access Analyzer：外部アクセス</td><td>S3・KMS・IAM ロール・SQS などが<strong>信頼ゾーン（アカウント／組織）の外</strong>に公開されていないか</td><td>意図しない共有の発見</td></tr>
+        <tr><td>IAM Access Analyzer：未使用アクセス</td><td>使われていないロール、アクセスキー、パスワード、権限</td><td>最小権限への絞り込み</td></tr>
+        <tr><td>IAM Access Analyzer：ポリシー検証・生成</td><td>文法やベストプラクティス違反の指摘、CloudTrail の実績から最小権限ポリシーを生成、カスタムチェック（新しいアクセスを許していないか）</td><td>ポリシー作成時、CI での自動チェック</td></tr>
+        <tr><td>最終アクセス情報</td><td>サービスごと・アクションごとの最終利用日時</td><td>不要な権限の削除</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <ol class="ladder mt" aria-label="アクセス拒否の調査手順">
+      <li><div><span class="q">誰として呼んでいるかを確認</span><p class="a"><code>aws sts get-caller-identity</code>。想定と違うロールやプロファイルで実行していることは多い。</p></div></li>
+      <li><div><span class="q">明示的な拒否を探す</span><p class="a">SCP、権限境界、リソースポリシー、VPC エンドポイントポリシー、セッションポリシーのどこかに Deny がないか。</p></div></li>
+      <li><div><span class="q">許可の有無を確認</span><p class="a">アイデンティティポリシーにアクションとリソース ARN が含まれるか、条件（MFA、IP、タグ、リージョン）を満たしているか。</p></div></li>
+      <li><div><span class="q">リソース側の許可</span><p class="a">クロスアカウントならバケットポリシーやキーポリシーで相手を許可しているか。KMS で暗号化されたオブジェクトはキーの使用許可も必要。</p></div></li>
+      <li><div><span class="q">シミュレーターで再現・修正を検証</span><p class="a">修正案を Policy Simulator や Access Analyzer のポリシーチェックで確認してから適用。</p></div></li>
+    </ol>
+  </section>
+
+  <!-- ===== Org ===== -->
+  <section class="sec" id="d4-org">
+    <h3>マルチアカウント戦略 <span class="sk">4.1.3</span></h3>
+    <figure class="fig">
+      <div class="canvas">
+      <svg viewBox="0 0 900 270" role="img" aria-label="組織のルートの下にOUがあり、SCPをOUに付けるとその配下の全アカウントに上限がかかる。管理アカウントにはSCPが効かない">
+        <defs><marker id="a-org" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <rect class="s-box2" x="360" y="14" width="180" height="40" rx="6"/><text class="s-tb" x="450" y="39" text-anchor="middle">ルート</text>
+        <rect class="s-box" x="40" y="100" width="190" height="44" rx="6"/><text class="s-tb" x="135" y="120" text-anchor="middle">管理アカウント</text><text class="s-ts" x="135" y="136" text-anchor="middle">SCP の対象外</text>
+        <rect class="s-acc" x="280" y="100" width="170" height="44" rx="6"/><text class="s-tb" x="365" y="127" text-anchor="middle">Security OU</text>
+        <rect class="s-acc" x="490" y="100" width="170" height="44" rx="6"/><text class="s-tb" x="575" y="127" text-anchor="middle">Workloads OU</text>
+        <rect class="s-acc" x="700" y="100" width="170" height="44" rx="6"/><text class="s-tb" x="785" y="127" text-anchor="middle">Sandbox OU</text>
+        <line class="s-l" x1="420" y1="54" x2="140" y2="96" marker-end="url(#a-org)"/><line class="s-l" x1="430" y1="54" x2="370" y2="96" marker-end="url(#a-org)"/><line class="s-l" x1="470" y1="54" x2="570" y2="96" marker-end="url(#a-org)"/><line class="s-l" x1="490" y1="54" x2="780" y2="96" marker-end="url(#a-org)"/>
+        <rect class="s-box" x="280" y="190" width="80" height="40" rx="5"/><text class="s-t" x="320" y="214" text-anchor="middle">Log</text>
+        <rect class="s-box" x="370" y="190" width="80" height="40" rx="5"/><text class="s-t" x="410" y="214" text-anchor="middle">Audit</text>
+        <rect class="s-box" x="490" y="190" width="80" height="40" rx="5"/><text class="s-t" x="530" y="214" text-anchor="middle">Prod</text>
+        <rect class="s-box" x="580" y="190" width="80" height="40" rx="5"/><text class="s-t" x="620" y="214" text-anchor="middle">Dev</text>
+        <rect class="s-box" x="745" y="190" width="80" height="40" rx="5"/><text class="s-t" x="785" y="214" text-anchor="middle">個人</text>
+        <line class="s-l" x1="340" y1="144" x2="322" y2="186" marker-end="url(#a-org)"/><line class="s-l" x1="390" y1="144" x2="408" y2="186" marker-end="url(#a-org)"/>
+        <line class="s-l" x1="550" y1="144" x2="532" y2="186" marker-end="url(#a-org)"/><line class="s-l" x1="600" y1="144" x2="618" y2="186" marker-end="url(#a-org)"/>
+        <line class="s-l" x1="785" y1="144" x2="785" y2="186" marker-end="url(#a-org)"/>
+        <text class="s-ts" x="575" y="248" text-anchor="middle">SCP：東京・大阪以外を拒否</text>
+        <text class="s-ts" x="785" y="248" text-anchor="middle">SCP：高額サービス拒否</text>
+        <text class="s-ts" x="365" y="248" text-anchor="middle">委任管理者（セキュリティ系サービス）</text>
+      </svg>
+      </div>
+      <figcaption><b>Organizations の構成例。</b>ポリシーは OU に付けると配下のアカウントすべてに継承されます。セキュリティ系サービスの管理は管理アカウントではなく、委任管理者に指定したセキュリティ用アカウントで行うのがベストプラクティスです。</figcaption>
+    </figure>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>ポリシーの種類</th><th>制御するもの</th><th>例</th></tr></thead>
+      <tbody>
+        <tr><td>サービスコントロールポリシー（SCP）</td><td>アカウント内の IAM プリンシパルが使える<strong>権限の上限</strong></td><td>許可リージョンの制限、CloudTrail の停止禁止、ルートユーザーの利用禁止</td></tr>
+        <tr><td>リソースコントロールポリシー（RCP）</td><td>アカウント内の<strong>リソース</strong>に対して許可できるアクセスの上限</td><td>組織外のプリンシパルから S3・KMS へのアクセスを禁止（データ境界）</td></tr>
+        <tr><td>宣言型ポリシー</td><td>サービスの設定状態を API に関係なく固定</td><td>IMDSv2 の強制、AMI・スナップショットのパブリック共有をブロック</td></tr>
+        <tr><td>タグポリシー</td><td>タグのキー・値の表記揺れを防ぐ</td><td><code>CostCenter</code> の値を決められた一覧に限定</td></tr>
+        <tr><td>バックアップポリシー</td><td>AWS Backup のプランを組織全体に適用</td><td>全アカウントで日次バックアップを強制</td></tr>
+      </tbody>
+    </table>
+    </div>
+<pre class="mt"><code>// SCP の例：東京・大阪以外のリージョンでの操作を拒否（グローバルサービスは除外）
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "DenyOutsideJapan",
+    "Effect": "Deny",
+    "NotAction": [
+      "iam:*", "organizations:*", "sts:*", "route53:*", "cloudfront:*",
+      "waf:*", "support:*", "budgets:*", "health:*", "trustedadvisor:*"
+    ],
+    "Resource": "*",
+    "Condition": {
+      "StringNotEquals": { "aws:RequestedRegion": ["ap-northeast-1", "ap-northeast-3"] }
+    }
+  }]
+}</code></pre>
+    <div class="grid2 mt">
+      <div class="card"><span class="tag">人のアクセス</span><h5>IAM Identity Center</h5><p>組織の全アカウントへのシングルサインオン。<strong>許可セット</strong>（権限の定義）をユーザー／グループとアカウントの組み合わせに割り当てると、各アカウントに IAM ロールが自動で作られます。ID ソースは Identity Center のディレクトリ、Active Directory、外部 IdP（SAML＋SCIM で自動同期）。アカウントごとに IAM ユーザーを作る運用を置き換えます。</p></div>
+      <div class="card"><span class="tag">ガバナンスの自動化</span><h5>AWS Control Tower</h5><p>ベストプラクティスに沿ったマルチアカウント環境（ランディングゾーン）を構築し、Log Archive・Audit アカウントを用意。<strong>コントロール</strong>は予防（SCP／RCP）・検出（Config ルール）・プロアクティブ（CloudFormation Hooks）の 3 種類。Account Factory で標準化されたアカウントを払い出し、設定のずれ（ドリフト）を検出します。</p></div>
+    </div>
+  </section>
+
+  <!-- ===== Trusted Advisor ===== -->
+  <section class="sec" id="d4-ta">
+    <h3>Trusted Advisor のセキュリティチェックと修復 <span class="sk">4.1.4</span></h3>
+    <div class="prose">
+      <p>Trusted Advisor はコスト・パフォーマンス・セキュリティ・耐障害性・サービスクォータ・運用上の優秀性の観点でアカウントを点検します。ベーシック／デベロッパーサポートでは一部の中核的なセキュリティチェックとサービスクォータのチェックのみ、ビジネス以上で全チェックと API・組織ビューが使えます。</p>
+    </div>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>チェック</th><th>何が問題か</th><th>修復</th></tr></thead>
+      <tbody>
+        <tr><td>セキュリティグループ - 無制限アクセスの特定ポート</td><td>22（SSH）、3389（RDP）などが 0.0.0.0/0 に開いている</td><td>送信元を管理用 CIDR に絞る、Session Manager に置き換えてポートを閉じる</td></tr>
+        <tr><td>Amazon S3 バケットのアクセス許可</td><td>バケットが公開・誰でも書き込み可能</td><td>S3 ブロックパブリックアクセスを有効化、バケットポリシーと ACL の見直し</td></tr>
+        <tr><td>ルートアカウントの MFA</td><td>ルートユーザーに MFA がない</td><td>MFA を有効化し、ルートのアクセスキーは削除</td></tr>
+        <tr><td>IAM の使用</td><td>IAM ユーザー等がなくルートを使っている</td><td>管理者ユーザーまたは Identity Center を用意し、ルートの日常利用をやめる</td></tr>
+        <tr><td>IAM パスワードポリシー</td><td>ポリシー未設定・弱い</td><td>長さ・文字種・再利用禁止を設定</td></tr>
+        <tr><td>IAM アクセスキーのローテーション</td><td>90 日以上ローテーションされていない</td><td>新キー作成 → アプリを切り替え → 旧キーを無効化 → 削除。可能ならロールに置き換え</td></tr>
+        <tr><td>漏洩したアクセスキー</td><td>公開リポジトリ等でキーが見つかった</td><td>直ちに無効化・削除し、CloudTrail で不正利用を確認。Health の <code>AWS_RISK_CREDENTIALS_EXPOSED</code> イベントを EventBridge で受けて自動対応も可能</td></tr>
+        <tr><td>EBS／RDS のパブリックスナップショット</td><td>スナップショットが全員に公開</td><td>共有設定をプライベートに変更。宣言型ポリシーやブロック設定で再発防止</td></tr>
+        <tr><td>CloudTrail のログ記録</td><td>証跡がない・一部リージョンのみ</td><td>全リージョンの証跡（組織の証跡）を作成</td></tr>
+        <tr><td>ELB のリスナーセキュリティ</td><td>古い暗号化方式や HTTP のみ</td><td>推奨セキュリティポリシーの HTTPS リスナー、HTTP→HTTPS リダイレクト</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout tip mt">
+      <span class="lbl">試験の着眼点</span>
+      <p>Trusted Advisor のチェック結果の変化は EventBridge（us-east-1）で受け取れます。「チェックが赤になったら自動で修復」なら EventBridge → Lambda／SSM Automation。サービスクォータの使用率に関するチェックは、上限に達して起動できなくなる前に Service Quotas で引き上げを申請するきっかけになります。</p>
+    </div>
+  </section>
+
+  <!-- ===== Config ===== -->
+  <section class="sec" id="d4-config">
+    <h3>コンプライアンス要件と継続的モニタリング（AWS Config） <span class="sk">4.1.5</span></h3>
+    <div class="prose">
+      <p>Config はリソースの<strong>設定項目（Configuration Item）</strong>を記録し、変更履歴のタイムラインと、ルールに照らした準拠／非準拠を継続的に評価します。CloudTrail が「操作の記録」なら、Config は「状態の記録と評価」です。</p>
+    </div>
+    <dl class="kv mt">
+      <dt>レコーダーと配信チャネル</dt><dd>記録対象のリソースタイプを選び（全リソース推奨）、設定履歴とスナップショットを S3 へ、変更通知を SNS へ。記録頻度は「継続的」か「日次（定期）」でコストを調整。</dd>
+      <dt>マネージドルール</dt><dd>AWS 提供のルール。例：<code>restricted-ssh</code>、<code>s3-bucket-public-read-prohibited</code>、<code>encrypted-volumes</code>、<code>required-tags</code>、<code>rds-multi-az-support</code>、<code>cloudtrail-enabled</code>、<code>iam-password-policy</code>。</dd>
+      <dt>カスタムルール</dt><dd>Lambda、または Guard（ポリシー言語）で独自のチェックを書く。</dd>
+      <dt>トリガー</dt><dd>「設定変更時」と「定期実行（1・3・6・12・24 時間）」。</dd>
+      <dt>修復</dt><dd>ルールに SSM Automation ランブックを関連付け、手動または<strong>自動修復</strong>（再試行回数を設定）。</dd>
+      <dt>コンフォーマンスパック</dt><dd>ルールと修復アクションを 1 つのパッケージ（YAML テンプレート）にまとめ、アカウントや<strong>組織全体へ一括展開</strong>。「Operational Best Practices for CIS／PCI DSS／NIST」などのサンプルがある。準拠スコアで全体の状況を把握。</dd>
+      <dt>アグリゲーター</dt><dd>複数アカウント・複数リージョンの Config データを 1 か所に集約して表示。</dd>
+      <dt>高度なクエリ</dt><dd>SQL ライクな構文で現在の設定を検索（例：暗号化されていない EBS の一覧）。</dd>
+      <dt>プロアクティブ評価</dt><dd>リソースを作成する前に、ルールに照らして評価（CloudFormation Hooks と連携）。</dd>
+    </dl>
+    <div class="callout tip mt">
+      <span class="lbl">試験の着眼点：リージョンとサービスの選択</span>
+      <ul>
+        <li>「データは日本国内にとどめる」→ SCP の <code>aws:RequestedRegion</code> で他リージョンの利用を拒否し、Config で準拠を継続監視。</li>
+        <li>「特定のコンプライアンス基準への準拠を証明」→ コンフォーマンスパックで継続評価し、AWS の第三者監査レポートは AWS Artifact から取得。</li>
+        <li>「承認されていないサービスの利用を禁止」→ SCP の許可リスト方式、または特定サービスを Deny。</li>
+      </ul>
+    </div>
+    <div class="callout pdf mt">
+      <span class="lbl">演習 PDF の論点（問題 10）</span>
+      <p>「環境の構成変更を監視してログを取得」→ <strong>Config</strong>。VPC 内の全トラフィックの監視と防御 → <strong>専用サブネットに配置した Network Firewall</strong> にルートテーブルで全トラフィックを通す（WAF は Web アプリ向け）。</p>
+    </div>
+  </section>
+
+  <!-- ===== Classification ===== -->
+  <section class="sec" id="d4-classify">
+    <h3>データ分類スキーム <span class="sk">4.2.1</span></h3>
+    <div class="prose">
+      <p>データ分類は「どのデータがどの機密度か」をラベル付けし、そのラベルに応じた保護（暗号化、アクセス制御、保持）を機械的に適用できるようにすることです。AWS での実装は<strong>タグ</strong>と<strong>自動検出</strong>の組み合わせです。</p>
+    </div>
+    <div class="grid2 mt">
+      <div class="card"><span class="tag">ラベル付け</span><h5>タグによる分類</h5><ul><li><code>DataClassification=Confidential</code> のようなタグをバケット・テーブル・ボリュームに付与。</li><li>タグポリシーで値の表記を統一、Config の <code>required-tags</code> で付け忘れを検出。</li><li>ABAC：<code>aws:ResourceTag/DataClassification</code> と <code>aws:PrincipalTag</code> を条件にしてアクセスを制御。</li><li>AWS Backup のリソース割り当てもタグで行える（機密度ごとに保持期間を変える）。</li></ul></div>
+      <div class="card"><span class="tag">自動検出</span><h5>Amazon Macie</h5><ul><li>S3 内の個人情報・認証情報・金融情報などの機微データを機械学習とパターンで検出。</li><li>自動検出（バケット全体を継続的にサンプリング）と、対象を指定する検出ジョブ。</li><li>マネージドデータ識別子に加え、正規表現のカスタムデータ識別子（社員番号など）。</li><li>検出結果は EventBridge・Security Hub へ。バケットが公開・未暗号化であることも報告。</li></ul></div>
+    </div>
+  </section>
+
+  <!-- ===== KMS ===== -->
+  <section class="sec" id="d4-kms">
+    <h3>保管中の暗号化（AWS KMS） <span class="sk">4.2.2</span></h3>
+    <figure class="fig">
+      <div class="canvas">
+      <svg viewBox="0 0 900 230" role="img" aria-label="エンベロープ暗号化。サービスがKMSにGenerateDataKeyを要求し、平文データキーでデータを暗号化して破棄、暗号化されたデータキーをデータと一緒に保存する。KMSキー自体はKMSから出ない">
+        <defs><marker id="a-kms" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <rect class="s-acc" x="20" y="60" width="200" height="110" rx="8"/><text class="s-tb" x="120" y="92" text-anchor="middle">AWS KMS</text><text class="s-ts" x="120" y="114" text-anchor="middle">KMS キー（HSM 内）</text><text class="s-ts" x="120" y="134" text-anchor="middle">外へ出ない</text><text class="s-tm" x="120" y="154" text-anchor="middle">キーポリシーで使用を制御</text>
+        <rect class="s-box" x="330" y="20" width="220" height="60" rx="6"/><text class="s-tb" x="440" y="46" text-anchor="middle">平文のデータキー</text><text class="s-ts" x="440" y="64" text-anchor="middle">データを暗号化したら破棄</text>
+        <rect class="s-box2" x="330" y="150" width="220" height="60" rx="6"/><text class="s-tb" x="440" y="176" text-anchor="middle">暗号化されたデータキー</text><text class="s-ts" x="440" y="194" text-anchor="middle">データと一緒に保存</text>
+        <line class="s-l" x1="220" y1="90" x2="326" y2="55" marker-end="url(#a-kms)"/><line class="s-l" x1="220" y1="140" x2="326" y2="175" marker-end="url(#a-kms)"/>
+        <text class="s-ts" x="232" y="118">GenerateDataKey</text>
+        <rect class="s-good" x="660" y="80" width="220" height="70" rx="6"/><text class="s-tb" x="770" y="108" text-anchor="middle">暗号化されたデータ</text><text class="s-ts" x="770" y="128" text-anchor="middle">EBS・S3・RDS など</text>
+        <line class="s-l" x1="550" y1="50" x2="656" y2="100" marker-end="url(#a-kms)"/><line class="s-l" x1="550" y1="180" x2="656" y2="130" marker-end="url(#a-kms)"/>
+        <text class="s-ts" x="610" y="60" text-anchor="middle">暗号化</text><text class="s-ts" x="610" y="178" text-anchor="middle">同梱</text>
+      </svg>
+      </div>
+      <figcaption><b>エンベロープ暗号化。</b>KMS が直接暗号化できるのは 4 KB までなので、実データはデータキーで暗号化し、データキーを KMS キーで暗号化します。復号時は暗号化されたデータキーを KMS に送って <code>Decrypt</code> してもらうため、<strong>キーポリシーで Decrypt を許可されていないと読めない</strong>ことがアクセス制御になります。</figcaption>
+    </figure>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>キーの種類</th><th>キーポリシーの管理</th><th>ローテーション</th><th>使いどころ</th></tr></thead>
+      <tbody>
+        <tr><td>AWS 所有キー</td><td>不可（見えない）</td><td>AWS が管理</td><td>既定の暗号化（SSE-S3、DynamoDB の既定など）</td></tr>
+        <tr><td>AWS マネージドキー（<code>aws/ebs</code> など）</td><td>不可</td><td>毎年自動</td><td>手軽な暗号化。ただし<strong>他アカウントと共有できない</strong>、キーポリシーを変えられない</td></tr>
+        <tr><td>カスタマーマネージドキー</td><td><strong>可</strong></td><td>任意で自動（期間 90〜2,560 日）＋オンデマンド</td><td>クロスアカウント共有、細かいアクセス制御、監査、削除や無効化の管理が必要な場合</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <dl class="kv mt">
+      <dt>キーポリシー</dt><dd>既定のポリシーにはアカウント（<code>:root</code>）に <code>kms:*</code> を許可する文があり、これによって IAM ポリシーでのキー権限付与が有効になる。キー管理者とキー利用者を分けて記述。</dd>
+      <dt>グラント</dt><dd>一時的・プログラム的な権限委譲。EBS や RDS などのサービスが内部で使う。</dd>
+      <dt><code>kms:ViaService</code></dt><dd>「S3 経由でのみこのキーを使える」のように、キーの利用を特定サービスからの呼び出しに限定する条件キー。</dd>
+      <dt>削除</dt><dd>即時削除はできず 7〜30 日の待機期間を経て削除。待機中はキャンセル可能。削除すると<strong>そのキーで暗号化したデータは二度と復号できない</strong>ので、まずは「無効化」で影響を確認。</dd>
+      <dt>インポートしたキーマテリアル</dt><dd>自動ローテーション不可（手動で新しいキーに切り替え）。有効期限を設定できる。</dd>
+      <dt>マルチリージョンキー</dt><dd>同じキーマテリアルを複数リージョンに複製。リージョン間で暗号化データをそのまま復号できる（DR 用）。</dd>
+      <dt>スロットリング</dt><dd>KMS の API にはリクエストクォータがある。大量の S3 オブジェクトで SSE-KMS を使うなら <strong>S3 バケットキー</strong>で KMS 呼び出しを大幅に削減。</dd>
+    </dl>
+    <h4>よく問われる暗号化の操作</h4>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>やりたいこと</th><th>方法</th></tr></thead>
+      <tbody>
+        <tr><td>既存の未暗号化 EBS を暗号化</td><td>スナップショット → 暗号化を指定してコピー → 新ボリュームを作成して付け替え。今後はリージョンの「EBS 暗号化をデフォルトにする」を有効化</td></tr>
+        <tr><td>既存の未暗号化 RDS を暗号化</td><td>スナップショット → 暗号化コピー → 復元（新インスタンス）。リードレプリカはソースと同じ暗号化状態</td></tr>
+        <tr><td>暗号化スナップショットを別アカウントへ共有</td><td>カスタマーマネージドキーで暗号化し、キーポリシーで相手アカウントに使用を許可してからスナップショットを共有</td></tr>
+        <tr><td>暗号化スナップショットを別リージョンへコピー</td><td>コピー時に送信先リージョンのキーを指定（KMS キーはリージョン単位。マルチリージョンキーなら同じキーとして扱える）</td></tr>
+        <tr><td>S3 で暗号化されていないアップロードを拒否</td><td>既定の暗号化（SSE-S3 は既に標準）。特定のキーを強制するならバケットポリシーで <code>s3:x-amz-server-side-encryption-aws-kms-key-id</code> を条件に Deny</td></tr>
+        <tr><td>EFS を暗号化</td><td>作成時のみ設定可能。既存は新しい暗号化済み EFS を作り DataSync でデータを移す</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout trap mt">
+      <span class="lbl">ひっかけ注意：暗号化と権限</span>
+      <p>SSE-KMS で暗号化された S3 オブジェクトの <code>GetObject</code> が AccessDenied になる → バケットポリシーや IAM が許可していても、<strong>KMS キーの <code>kms:Decrypt</code> 権限</strong>がなければ失敗します。クロスアカウントでは特に見落とされがちです。</p>
+    </div>
+  </section>
+
+  <!-- ===== TLS ===== -->
+  <section class="sec" id="d4-tls">
+    <h3>転送中の暗号化（ACM ほか） <span class="sk">4.2.3</span></h3>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>項目</th><th>要点</th></tr></thead>
+      <tbody>
+        <tr><td>ACM のパブリック証明書</td><td>ACM と統合されたサービス（ELB、CloudFront、API Gateway など）で使う分は無料。<strong>DNS 検証</strong>（Route 53 に CNAME を作る）なら自動更新される。メール検証は更新時にも承認が必要</td></tr>
+        <tr><td>自動更新</td><td>期限の 60 日前から更新を試みる。DNS 検証の CNAME を消していたり、証明書がどのリソースにも関連付けられていないと更新できない</td></tr>
+        <tr><td>インポートした証明書</td><td>サードパーティの証明書は<strong>自動更新されない</strong>。<code>DaysToExpiry</code> メトリクスや期限切れ前の EventBridge イベント（既定 45 日前）で監視し、手動で再インポート</td></tr>
+        <tr><td>リージョン</td><td>ACM 証明書はリージョン単位。<strong>CloudFront で使う証明書は us-east-1</strong> で発行・インポート。ALB で使うなら ALB と同じリージョン</td></tr>
+        <tr><td>ELB</td><td>HTTPS／TLS リスナーに証明書を設定し、セキュリティポリシー（TLS バージョンと暗号スイート）を選択。ALB は SNI で複数証明書。HTTP リスナーは HTTPS へリダイレクト。必要ならターゲットまで再暗号化（エンドツーエンド）</td></tr>
+        <tr><td>CloudFront</td><td>ビューワープロトコルポリシー（HTTPS へリダイレクト／HTTPS のみ）、オリジンプロトコルポリシー（オリジンまでも HTTPS）</td></tr>
+        <tr><td>RDS</td><td>SSL/TLS 接続を強制：PostgreSQL は <code>rds.force_ssl=1</code>、MySQL は <code>require_secure_transport=ON</code>（パラメータグループ）</td></tr>
+        <tr><td>S3</td><td>バケットポリシーで <code>aws:SecureTransport</code> が false のリクエストを Deny</td></tr>
+        <tr><td>プライベート CA</td><td>AWS Private CA で社内向け証明書を発行し、ACM で管理</td></tr>
+      </tbody>
+    </table>
+    </div>
+<pre class="mt"><code>// HTTPS 以外のアクセスを拒否するバケットポリシー
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "DenyInsecureTransport",
+    "Effect": "Deny",
+    "Principal": "*",
+    "Action": "s3:*",
+    "Resource": ["arn:aws:s3:::todo-assets", "arn:aws:s3:::todo-assets/*"],
+    "Condition": { "Bool": { "aws:SecureTransport": "false" } }
+  }]
+}</code></pre>
+  </section>
+
+  <!-- ===== Secrets ===== -->
+  <section class="sec" id="d4-secrets">
+    <h3>シークレットの安全な保管 <span class="sk">4.2.4</span></h3>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>観点</th><th>Secrets Manager</th><th>Parameter Store（SecureString）</th></tr></thead>
+      <tbody>
+        <tr><td>自動ローテーション</td><td class="yes">あり（Lambda、RDS／Aurora などはマネージドローテーション）</td><td class="no">なし（自作が必要）</td></tr>
+        <tr><td>クロスリージョンレプリカ</td><td class="yes">あり</td><td class="no">なし</td></tr>
+        <tr><td>クロスアカウント共有</td><td>リソースポリシーで可能</td><td>Advanced パラメータは RAM で共有可能</td></tr>
+        <tr><td>料金</td><td>シークレットごとの月額＋API 呼び出し</td><td>Standard は無料</td></tr>
+        <tr><td>暗号化</td><td>KMS（必須）</td><td>KMS</td></tr>
+        <tr><td>向いているもの</td><td>DB パスワード、API キーなどローテーションが必要な秘密情報</td><td>設定値、ローテーション不要の秘密情報</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <dl class="kv mt">
+      <dt>バージョンとステージ</dt><dd><code>AWSCURRENT</code>（現行）・<code>AWSPENDING</code>（ローテーション中の新値）・<code>AWSPREVIOUS</code>（直前）。アプリは常に AWSCURRENT を取得する。</dd>
+      <dt>ローテーション戦略</dt><dd>シングルユーザー（同じユーザーのパスワードを更新、切り替え時に一瞬失敗しうる）と、交互ユーザー（2 つのユーザーを交互に更新、無停止）。</dd>
+      <dt>ローテーション失敗の典型</dt><dd>VPC 内の Lambda が <strong>DB と Secrets Manager の両方へ到達できない</strong>（Secrets Manager の VPC エンドポイントか NAT が必要）、DB のセキュリティグループで Lambda を許可していない、Lambda の権限不足。</dd>
+      <dt>RDS との統合</dt><dd>RDS のマスターユーザーパスワードを Secrets Manager で管理させる設定にすると、作成・ローテーションまで自動化。</dd>
+      <dt>取り出し方</dt><dd>アプリから SDK で取得（キャッシュ推奨）、ECS タスク定義の <code>secrets</code>（<code>valueFrom</code>）で環境変数に注入、Lambda のパラメータ・シークレット拡張、CloudFormation の動的参照。</dd>
+    </dl>
+    <div class="callout trap mt">
+      <span class="lbl">ひっかけ注意</span>
+      <p>「ユーザーデータや環境変数、AMI、Git リポジトリにパスワードを書く」選択肢は常に誤りです。EC2 上のアプリには IAM ロールを付け、実行時に Secrets Manager から取得させます。ECS では<strong>タスク実行ロール</strong>にシークレット取得の権限が必要です。</p>
+    </div>
+  </section>
+
+  <!-- ===== Findings ===== -->
+  <section class="sec" id="d4-findings">
+    <h3>検出結果のレポートと修復 <span class="sk">4.2.5</span></h3>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>サービス</th><th>何を検出するか</th><th>データ源・前提</th></tr></thead>
+      <tbody>
+        <tr><td>Amazon GuardDuty</td><td><strong>脅威</strong>：不審な API 呼び出し、暗号資産マイニング、既知の悪性 IP との通信、認証情報の不正利用、マルウェア</td><td>CloudTrail 管理イベント・VPC フローログ・DNS ログを<strong>独自に</strong>分析（自分で証跡やフローログを有効にしなくてよい）。保護プランで S3 データイベント、EKS、ランタイム監視、マルウェア保護、RDS のログイン、Lambda のネットワークを追加</td></tr>
+        <tr><td>Amazon Inspector</td><td><strong>脆弱性</strong>：EC2 の OS パッケージの CVE、意図しないネットワーク到達性、ECR イメージ、Lambda の関数とコード</td><td>EC2 は SSM エージェント経由（またはエージェントレス）。継続的に自動スキャン</td></tr>
+        <tr><td>Amazon Macie</td><td><strong>機微データ</strong>：S3 内の個人情報など</td><td>S3 を対象</td></tr>
+        <tr><td>AWS Config</td><td><strong>設定の非準拠</strong></td><td>ルールとコンフォーマンスパック</td></tr>
+        <tr><td>AWS Security Hub（CSPM）</td><td><strong>ベストプラクティス違反の集約と統制</strong>：AWS 基礎セキュリティのベストプラクティス、CIS、PCI DSS、NIST などの標準に基づくコントロール</td><td>Config の記録が前提。各サービスの検出結果を共通形式（ASFF）で集約</td></tr>
+        <tr><td>AWS Security Agent（v1.1 追加）</td><td><strong>アプリの脆弱性</strong>：オンデマンド・継続的なペネトレーションテスト、設計とコードのセキュリティレビュー</td><td>アプリやソースコード、設計資料を対象に攻撃経路を検証</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout new mt">
+      <span class="lbl">最新動向：Security Hub の名称</span>
+      <p>従来の Security Hub はコントロール評価を中心とする <strong>Security Hub CSPM</strong> という名称になり、新しい <strong>Security Hub</strong> は GuardDuty・Inspector・Macie・CSPM の結果を相関させ、実際に悪用されうる「露出」を優先順位付きで示す統合画面として提供されています。試験の選択肢ではどちらも「Security Hub」と表記されうるので、「複数サービスの検出結果を集約し優先順位付けする場所」と理解しておけば判断できます。</p>
+    </div>
+    <figure class="fig mt">
+      <div class="canvas">
+      <svg viewBox="0 0 900 260" role="img" aria-label="GuardDuty、Inspector、Macie、ConfigなどがSecurity Hubに集約され、集約リージョンと委任管理者に集まる。検出結果はEventBridgeでLambdaやSSM Automationに渡され自動修復される">
+        <defs><marker id="a-fd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <rect class="s-box" x="20" y="20" width="150" height="34" rx="4"/><text class="s-t" x="95" y="42" text-anchor="middle">GuardDuty</text>
+        <rect class="s-box" x="20" y="66" width="150" height="34" rx="4"/><text class="s-t" x="95" y="88" text-anchor="middle">Inspector</text>
+        <rect class="s-box" x="20" y="112" width="150" height="34" rx="4"/><text class="s-t" x="95" y="134" text-anchor="middle">Macie</text>
+        <rect class="s-box" x="20" y="158" width="150" height="34" rx="4"/><text class="s-t" x="95" y="180" text-anchor="middle">Config</text>
+        <rect class="s-box" x="20" y="204" width="150" height="34" rx="4"/><text class="s-t" x="95" y="226" text-anchor="middle">Access Analyzer</text>
+        <rect class="s-acc" x="250" y="70" width="210" height="120" rx="8"/><text class="s-tb" x="355" y="104" text-anchor="middle">Security Hub</text><text class="s-ts" x="355" y="126" text-anchor="middle">委任管理者アカウント</text><text class="s-ts" x="355" y="144" text-anchor="middle">集約リージョン</text><text class="s-ts" x="355" y="162" text-anchor="middle">自動化ルール</text>
+        <line class="s-l" x1="170" y1="37" x2="246" y2="90" marker-end="url(#a-fd)"/><line class="s-l" x1="170" y1="83" x2="246" y2="110" marker-end="url(#a-fd)"/><line class="s-l" x1="170" y1="129" x2="246" y2="130" marker-end="url(#a-fd)"/><line class="s-l" x1="170" y1="175" x2="246" y2="150" marker-end="url(#a-fd)"/><line class="s-l" x1="170" y1="221" x2="246" y2="170" marker-end="url(#a-fd)"/>
+        <rect class="s-acc" x="530" y="100" width="150" height="60" rx="6"/><text class="s-tb" x="605" y="126" text-anchor="middle">EventBridge</text><text class="s-ts" x="605" y="144" text-anchor="middle">検出結果イベント</text>
+        <line class="s-l" x1="460" y1="130" x2="526" y2="130" marker-end="url(#a-fd)"/>
+        <rect class="s-good" x="740" y="40" width="140" height="44" rx="5"/><text class="s-t" x="810" y="60" text-anchor="middle">Lambda</text><text class="s-tm" x="810" y="76" text-anchor="middle">SG を隔離用に変更</text>
+        <rect class="s-good" x="740" y="108" width="140" height="44" rx="5"/><text class="s-t" x="810" y="128" text-anchor="middle">SSM Automation</text><text class="s-tm" x="810" y="144" text-anchor="middle">スナップショット取得</text>
+        <rect class="s-good" x="740" y="176" width="140" height="44" rx="5"/><text class="s-t" x="810" y="196" text-anchor="middle">SNS／チケット</text><text class="s-tm" x="810" y="212" text-anchor="middle">担当者へ通知</text>
+        <line class="s-l" x1="680" y1="120" x2="736" y2="62" marker-end="url(#a-fd)"/><line class="s-l" x1="680" y1="130" x2="736" y2="130" marker-end="url(#a-fd)"/><line class="s-l" x1="680" y1="140" x2="736" y2="198" marker-end="url(#a-fd)"/>
+      </svg>
+      </div>
+      <figcaption><b>検出結果の集約と自動修復。</b>各サービスの検出結果を Security Hub に集め、EventBridge のルール（またはカスタムアクション）で修復処理につなぎます。GuardDuty の検出結果は Security Hub を経由せず EventBridge で直接受けることもできます。</figcaption>
+    </figure>
+    <h4>Security Hub の運用設定</h4>
+    <dl class="kv">
+      <dt>委任管理者と中央設定</dt><dd>Organizations の委任管理者アカウントで<strong>中央設定</strong>を有効にし、<strong>設定ポリシー</strong>で「どの標準・コントロールをどのアカウント／OU で有効にするか」を一元管理。</dd>
+      <dt>クロスリージョン集約</dt><dd>ホーム（集約）リージョンを決め、リンクしたリージョンの検出結果をそこへ集める。</dd>
+      <dt>統合されたコントロールの検出結果</dt><dd>同じコントロールが複数の標準に含まれていても、<strong>検出結果を 1 つにまとめる</strong>設定。管理者アカウントで有効にするとメンバーにも適用される。</dd>
+      <dt>自動化ルール</dt><dd>条件に一致する検出結果の重要度を変更したり、抑制したりする（ノイズ削減）。</dd>
+      <dt>カスタムアクション</dt><dd>コンソールで選んだ検出結果を EventBridge に送り、手動トリガーで修復を実行。</dd>
+    </dl>
+    <div class="callout pdf mt">
+      <span class="lbl">演習 PDF の論点（問題 6）</span>
+      <p>リージョン集約は設定済みなのに、標準ごとに検出結果がばらばらに出る → 管理者アカウントで<strong>「統合されたコントロールの検出結果」</strong>を有効化。中央設定は管理方式、ホーム／リンクリージョンは集約先の設定で、検出結果の統合とは別の機能です。</p>
+    </div>
+    <h4>GuardDuty の運用</h4>
+    <dl class="kv">
+      <dt>検出結果タイプ</dt><dd><code>脅威の目的:リソース/詳細</code> の形式。例：<code>UnauthorizedAccess:EC2/SSHBruteForce</code>、<code>CryptoCurrency:EC2/BitcoinTool.B!DNS</code>、<code>UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration</code>。</dd>
+      <dt>重要度</dt><dd>低・中・高・重大。EventBridge のパターンで重要度の数値を条件にできる。</dd>
+      <dt>抑制ルール</dt><dd>既知の正常な動作（脆弱性スキャナーなど）による検出結果を自動アーカイブ。</dd>
+      <dt>信頼できる IP リスト／脅威リスト</dt><dd>自社の IP を除外、独自の脅威インテリジェンスを追加。</dd>
+      <dt>マルチアカウント</dt><dd>委任管理者で組織の全アカウントを自動有効化。</dd>
+      <dt>侵害インスタンスの対応例</dt><dd>EventBridge → Lambda で、通信を遮断する隔離用 SG に付け替え、EBS スナップショットを取得し（証拠保全）、ASG から切り離して調査。</dd>
+    </dl>
+  </section>
+</section>

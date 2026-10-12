@@ -84,6 +84,7 @@ Claude Code 主導で IaC を書いて実機デプロイ（毎日：30分）
 | 区分 | 教材 | 費用 |
 |---|---|---|
 | 公式ガイド | AWS CloudOps Engineer – Associate 試験ガイド（PDF） | ¥0 |
+| 教科書（本リポジトリ） | [`docs/textbook/soa-c03-textbook.html`](./docs/textbook/soa-c03-textbook.html)（試験ガイド v1.1 準拠・図解・確認問題 50 問。`python docs/textbook/build.py` で再生成） | ¥0 |
 | 体系インプット | AWS Skill Builder 無料コース（Exam Readiness 等） | ¥0 |
 | 公式問題 | AWS 公式 Practice Question Set（Skill Builder 無料枠） | ¥0 |
 | 問題集（メイン） | Udemy「CloudOps エンジニア・アソシエイト 模擬試験問題集 6回分375問」 | 約 ¥1,500〜2,600 |

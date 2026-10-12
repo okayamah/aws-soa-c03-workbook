@@ -1,0 +1,389 @@
+
+  <!-- ===== 1.3 Compute optimization ===== -->
+  <section class="sec" id="d1-compute">
+    <h3>コンピューティングの最適化 <span class="sk">1.3.1</span></h3>
+    <div class="prose">
+      <p>タスク 1.3 は旧 SOA-C02 の「コストとパフォーマンスの最適化」分野を引き継いでいます。運用者に求められるのは、メトリクスとツールの推奨事項から<strong>過剰／過小なリソースを見つけ、安全に変更する</strong>ことです。中心となるツールは AWS Compute Optimizer です。</p>
+    </div>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>ツール</th><th>何を推奨するか</th><th>押さえる要点</th></tr></thead>
+      <tbody>
+        <tr><td>AWS Compute Optimizer</td><td>EC2、Auto Scaling グループ、EBS ボリューム、Lambda 関数、ECS on Fargate、RDS／Aurora などの<strong>サイズ適正化</strong>（タイプ・サイズ・メモリ量）</td><td>利用前に<strong>オプトイン</strong>が必要（Organizations の管理アカウントから一括も可）。既定で過去 <strong>14 日</strong>の CloudWatch メトリクスを分析し、検出結果は「過剰プロビジョニング／過小プロビジョニング／最適化済み」。<strong>拡張インフラストラクチャメトリクス</strong>（有料）で分析期間を <strong>93 日</strong>に延長。メモリを考慮させるには CloudWatch エージェントでメモリを送る（または外部監視ツールから取り込み）。</td></tr>
+        <tr><td>AWS Trusted Advisor</td><td>コスト最適化・パフォーマンス・セキュリティ・耐障害性・サービスクォータ・運用上の優秀性のチェック</td><td>アイドル状態の RDS、低使用率 EC2、未関連付けの Elastic IP などを指摘。ただしサイズ適正化の詳細は Compute Optimizer のデータを利用しています。</td></tr>
+        <tr><td>Cost Optimization Hub</td><td>組織全体のコスト削減機会（サイズ適正化、Savings Plans、アイドル削除など）を集約・優先順位付け</td><td>重複を排除した推定削減額で比較できる。</td></tr>
+        <tr><td>Cost Explorer</td><td>コストと使用量の可視化・予測、RI／Savings Plans の購入推奨、サイズ適正化推奨</td><td>原因分析と傾向把握のためのツール。</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout pdf mt">
+      <span class="lbl">演習 PDF の論点（問題 1）</span>
+      <p>EC2・Lambda・EBS の最適化推奨を「直接」得るなら <strong>Compute Optimizer</strong>。Trusted Advisor も推奨を出しますが内部で Compute Optimizer などのデータを使っており、Cost and Usage Report や Cost Explorer はコストの可視化が主目的です。</p>
+    </div>
+
+    <h4>インスタンスファミリーの選び方</h4>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>ファミリー</th><th>特性</th><th>典型的な用途・判断材料</th></tr></thead>
+      <tbody>
+        <tr><td>T（バースト可能）</td><td>ベースライン性能＋CPU クレジットでバースト</td><td><code>CPUCreditBalance</code> が 0 に張り付き性能が落ちる → 上位サイズ、M 系へ変更、または Unlimited モード（超過分は追加課金）</td></tr>
+        <tr><td>M（汎用）</td><td>CPU とメモリのバランス</td><td>Web／アプリサーバー全般</td></tr>
+        <tr><td>C（コンピューティング最適化）</td><td>CPU 比率が高い</td><td>バッチ、エンコード、高トラフィック Web。CPU 使用率が常に高い場合</td></tr>
+        <tr><td>R・X（メモリ最適化）</td><td>メモリ比率が高い</td><td>インメモリ DB、キャッシュ、大規模 JVM。メモリ不足やスワップが多い場合</td></tr>
+        <tr><td>I・D（ストレージ最適化）</td><td>高速なローカル NVMe インスタンスストア</td><td>高 IOPS のローカル処理。インスタンスストアは停止で消える</td></tr>
+        <tr><td>P・G・Inf・Trn（高速コンピューティング）</td><td>GPU・機械学習アクセラレーター</td><td>学習・推論・グラフィックス</td></tr>
+        <tr><td>末尾 g（Graviton）</td><td>Arm ベース、同等性能で低コスト</td><td>x86 からの切り替えは AMI の作り直しが必要（アーキテクチャが違う）</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h4>インスタンスタイプを変更する手順</h4>
+    <ol class="ladder">
+      <li><div><span class="q">互換性を確認する</span><p class="a">同じアーキテクチャ（x86_64／arm64）か、仮想化タイプ（HVM）、ENA ドライバー・NVMe ドライバーの有無、アタッチできる EBS ボリューム数とネットワークインターフェイス数。</p></div></li>
+      <li><div><span class="q">EBS-backed なら停止する</span><p class="a">実行中のままタイプは変えられません。インスタンスストアがルートのインスタンスはタイプ変更できないので、新しいインスタンスへ移行します。</p></div></li>
+      <li><div><span class="q">タイプを変更して起動する</span><p class="a">停止中にインスタンスタイプを変更して起動。パブリック IPv4 アドレス（Elastic IP でないもの）は変わります。インスタンスストアのデータは消えます。</p></div></li>
+      <li><div><span class="q">Auto Scaling 配下なら起動テンプレートを更新</span><p class="a">個々のインスタンスではなく、起動テンプレートの新バージョンを作り、インスタンスの更新（Instance Refresh）で順次置き換えます。</p></div></li>
+    </ol>
+    <div class="callout pdf mt">
+      <span class="lbl">演習 PDF の論点（問題 2）</span>
+      <p>t3 から C 系へ変更 → 「停止 → タイプ変更 → 起動」。スナップショットからの起動や AMI からの新規起動は不要な遠回りで、実行中の変更は不可能です。</p>
+    </div>
+
+    <h4>購入オプションとタグの活用</h4>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>オプション</th><th>割引と約束</th><th>向いている負荷</th></tr></thead>
+      <tbody>
+        <tr><td>オンデマンド</td><td>なし</td><td>短期・予測不能</td></tr>
+        <tr><td>Compute Savings Plans</td><td>1 年／3 年の 1 時間あたり利用額をコミット。EC2（ファミリー・リージョン問わず）・Fargate・Lambda に適用</td><td>構成が変わりうる定常負荷。柔軟性が最も高い</td></tr>
+        <tr><td>EC2 Instance Savings Plans</td><td>特定リージョン・特定ファミリーにコミット。割引率は Compute より大きい</td><td>ファミリーを変えない定常負荷</td></tr>
+        <tr><td>リザーブドインスタンス</td><td>Standard／Convertible。特定 AZ を指定するとキャパシティ予約も付く</td><td>既存の RI 運用。新規は Savings Plans が主流</td></tr>
+        <tr><td>スポットインスタンス</td><td>最大 90% 程度の割引。<strong>2 分前の中断通知</strong>で回収される</td><td>中断に耐えるバッチ・ステートレス処理。ASG の混合インスタンスで分散</td></tr>
+        <tr><td>オンデマンドキャパシティ予約</td><td>割引なし（Savings Plans と併用可）。特定 AZ でのキャパシティを確保。使わなくても課金</td><td>イベント時など、確実に起動したい期間</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="prose mt">
+      <p><strong>リソースタグ</strong>は最適化の単位を決める道具です。<code>Environment=dev</code> のタグで夜間停止の対象を絞る、コスト配分タグ（請求コンソールで有効化が必要）でチーム別のコストを見る、Compute Optimizer の推奨をタグでフィルターする、といった使い方が問われます。</p>
+    </div>
+  </section>
+
+  <!-- ===== EBS ===== -->
+  <section class="sec" id="d1-ebs">
+    <h3>EBS のパフォーマンスとボリュームタイプ <span class="sk">1.3.2</span></h3>
+    <figure class="fig">
+      <div class="canvas">
+      <svg viewBox="0 0 900 280" role="img" aria-label="ボリューム1つあたりの最大IOPSと最大スループット。io2 Block Expressが256,000 IOPSと4,000 MiB/sで最大、gp3は80,000 IOPSと2,000 MiB/s">
+        <text class="s-tb" x="110" y="20">最大 IOPS（対数目盛）</text>
+        <text class="s-tb" x="560" y="20">最大スループット（MiB/s）</text>
+        <line class="s-grid" x1="110" y1="30" x2="110" y2="226"/><line class="s-grid" x1="185" y1="30" x2="185" y2="226"/><line class="s-grid" x1="260" y1="30" x2="260" y2="226"/><line class="s-grid" x1="335" y1="30" x2="335" y2="226"/><line class="s-grid" x1="410" y1="30" x2="410" y2="226"/>
+        <text class="s-tm" x="110" y="244" text-anchor="middle">100</text><text class="s-tm" x="185" y="244" text-anchor="middle">1K</text><text class="s-tm" x="260" y="244" text-anchor="middle">10K</text><text class="s-tm" x="335" y="244" text-anchor="middle">100K</text><text class="s-tm" x="410" y="244" text-anchor="middle">1M</text>
+        <line class="s-grid" x1="560" y1="30" x2="560" y2="226"/><line class="s-grid" x1="635" y1="30" x2="635" y2="226"/><line class="s-grid" x1="710" y1="30" x2="710" y2="226"/><line class="s-grid" x1="785" y1="30" x2="785" y2="226"/><line class="s-grid" x1="860" y1="30" x2="860" y2="226"/>
+        <text class="s-tm" x="560" y="244" text-anchor="middle">0</text><text class="s-tm" x="635" y="244" text-anchor="middle">1,000</text><text class="s-tm" x="710" y="244" text-anchor="middle">2,000</text><text class="s-tm" x="785" y="244" text-anchor="middle">3,000</text><text class="s-tm" x="860" y="244" text-anchor="middle">4,000</text>
+        <text class="s-t" x="100" y="53" text-anchor="end">io2 BE</text>
+        <text class="s-t" x="100" y="85" text-anchor="end">gp3</text>
+        <text class="s-t" x="100" y="117" text-anchor="end">io1</text>
+        <text class="s-t" x="100" y="149" text-anchor="end">gp2</text>
+        <text class="s-t" x="100" y="181" text-anchor="end">st1（HDD）</text>
+        <text class="s-t" x="100" y="213" text-anchor="end">sc1（HDD）</text>
+        <g class="bar-hit"><title>io2 Block Express: 256,000 IOPS</title><path class="f-acc" d="M110 40 h251.6 a4 4 0 0 1 4 4 v10 a4 4 0 0 1 -4 4 h-251.6 z"/><text class="s-ts" x="371" y="53">256,000</text></g>
+        <g class="bar-hit"><title>gp3: 80,000 IOPS</title><path class="f-acc" d="M110 72 h213.7 a4 4 0 0 1 4 4 v10 a4 4 0 0 1 -4 4 h-213.7 z"/><text class="s-ts" x="333" y="85">80,000</text></g>
+        <g class="bar-hit"><title>io1: 64,000 IOPS</title><path class="f-acc" d="M110 104 h206.5 a4 4 0 0 1 4 4 v10 a4 4 0 0 1 -4 4 h-206.5 z"/><text class="s-ts" x="326" y="117">64,000</text></g>
+        <g class="bar-hit"><title>gp2: 16,000 IOPS</title><path class="f-acc" d="M110 136 h161.3 a4 4 0 0 1 4 4 v10 a4 4 0 0 1 -4 4 h-161.3 z"/><text class="s-ts" x="281" y="149">16,000</text></g>
+        <g class="bar-hit"><title>st1: 500 IOPS（1 MiB I/O）</title><path class="f-acc" d="M110 168 h48.4 a4 4 0 0 1 4 4 v10 a4 4 0 0 1 -4 4 h-48.4 z"/><text class="s-ts" x="168" y="181">500</text></g>
+        <g class="bar-hit"><title>sc1: 250 IOPS（1 MiB I/O）</title><path class="f-acc" d="M110 200 h25.8 a4 4 0 0 1 4 4 v10 a4 4 0 0 1 -4 4 h-25.8 z"/><text class="s-ts" x="146" y="213">250</text></g>
+        <g class="bar-hit"><title>io2 Block Express: 4,000 MiB/s</title><path class="f-acc" d="M560 40 h296 a4 4 0 0 1 4 4 v10 a4 4 0 0 1 -4 4 h-296 z"/><text class="s-ts" x="852" y="35" text-anchor="end">4,000</text></g>
+        <g class="bar-hit"><title>gp3: 2,000 MiB/s</title><path class="f-acc" d="M560 72 h146 a4 4 0 0 1 4 4 v10 a4 4 0 0 1 -4 4 h-146 z"/><text class="s-ts" x="720" y="85">2,000</text></g>
+        <g class="bar-hit"><title>io1: 1,000 MiB/s</title><path class="f-acc" d="M560 104 h71 a4 4 0 0 1 4 4 v10 a4 4 0 0 1 -4 4 h-71 z"/><text class="s-ts" x="645" y="117">1,000</text></g>
+        <g class="bar-hit"><title>gp2: 250 MiB/s</title><path class="f-acc" d="M560 136 h14.75 a4 4 0 0 1 4 4 v10 a4 4 0 0 1 -4 4 h-14.75 z"/><text class="s-ts" x="588" y="149">250</text></g>
+        <g class="bar-hit"><title>st1: 500 MiB/s</title><path class="f-acc" d="M560 168 h33.5 a4 4 0 0 1 4 4 v10 a4 4 0 0 1 -4 4 h-33.5 z"/><text class="s-ts" x="607" y="181">500</text></g>
+        <g class="bar-hit"><title>sc1: 250 MiB/s</title><path class="f-acc" d="M560 200 h14.75 a4 4 0 0 1 4 4 v10 a4 4 0 0 1 -4 4 h-14.75 z"/><text class="s-ts" x="588" y="213">250</text></g>
+        <line class="s-axis" x1="110" y1="30" x2="110" y2="226"/><line class="s-axis" x1="560" y1="30" x2="560" y2="226"/>
+      </svg>
+      </div>
+      <figcaption><b>ボリューム 1 つあたりの性能上限（io2 BE＝io2 Block Express）。</b>gp3 は 2025 年 9 月に上限が 64 TiB・80,000 IOPS・2,000 MiB/s へ引き上げられました（Outposts は従来値）。実際の性能はインスタンス側の EBS 帯域上限にも制約されます。</figcaption>
+    </figure>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>タイプ</th><th>サイズ</th><th>性能の決まり方</th><th>用途・注意点</th></tr></thead>
+      <tbody>
+        <tr><td>gp3（汎用 SSD）</td><td>1 GiB〜64 TiB</td><td>サイズに関係なく<strong>ベースライン 3,000 IOPS・125 MiB/s</strong>。IOPS とスループットを独立して追加購入</td><td>既定の選択肢。gp2 より約 20% 安く、性能を容量と切り離せる。gp2 からの移行はコスト削減の定番</td></tr>
+        <tr><td>gp2（汎用 SSD・旧世代）</td><td>1 GiB〜16 TiB</td><td><strong>3 IOPS/GiB</strong>（最小 100、最大 16,000）。1 TiB 未満は<strong>クレジットで 3,000 IOPS までバースト</strong></td><td><code>BurstBalance</code> が 0 になると性能が急落。容量を増やすか gp3 へ</td></tr>
+        <tr><td>io2 Block Express</td><td>4 GiB〜64 TiB</td><td>最大 256,000 IOPS（1,000 IOPS/GiB）、4,000 MiB/s</td><td>ミッションクリティカルな DB。耐久性 99.999%。マルチアタッチ対応</td></tr>
+        <tr><td>io1</td><td>4 GiB〜16 TiB</td><td>最大 64,000 IOPS（50 IOPS/GiB）</td><td>旧世代のプロビジョンド IOPS。マルチアタッチ対応</td></tr>
+        <tr><td>st1（スループット最適化 HDD）</td><td>125 GiB〜16 TiB</td><td>最大 500 MiB/s。大きなシーケンシャル I/O 向け</td><td>ログ処理、ビッグデータ。<strong>ブートボリューム不可</strong></td></tr>
+        <tr><td>sc1（Cold HDD）</td><td>125 GiB〜16 TiB</td><td>最大 250 MiB/s</td><td>アクセス頻度の低いデータを最安で。ブート不可</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <h4>性能問題を見抜くメトリクス</h4>
+    <dl class="kv">
+      <dt>VolumeQueueLength</dt><dd>処理待ちの I/O 数。高止まりなら IOPS が足りない（プロビジョンド IOPS を増やす、gp3 の IOPS 追加、io2 へ）。</dd>
+      <dt>BurstBalance</dt><dd>gp2・st1・sc1 のバーストクレジット残量（%）。0 付近ならベースライン性能まで落ちている。</dd>
+      <dt>VolumeReadOps / WriteOps</dt><dd>期間あたりの I/O 回数。期間の秒数で割ると IOPS。</dd>
+      <dt>VolumeThroughputPercentage</dt><dd>プロビジョンド IOPS（io1/io2）に対する実績の割合。</dd>
+      <dt>VolumeIdleTime</dt><dd>I/O がなかった時間。未使用ボリュームの発見（削除してコスト削減）。</dd>
+      <dt>EBSIOBalance% / EBSByteBalance%</dt><dd>インスタンス側の EBS 帯域のバーストクレジット。ボリュームではなく<strong>インスタンスの EBS 帯域上限</strong>がボトルネックかを判断。</dd>
+    </dl>
+    <h4>運用操作の要点</h4>
+    <dl class="kv mt">
+      <dt>Elastic Volumes</dt><dd>タイプ・サイズ・IOPS・スループットを<strong>オンラインで変更</strong>（デタッチ不要）。同じボリュームの次の変更までは 6 時間待つ。<strong>縮小は不可</strong>。サイズ拡張後は OS 側でパーティションとファイルシステムの拡張（<code>growpart</code>・<code>xfs_growfs</code>／<code>resize2fs</code>）が必要。</dd>
+      <dt>スナップショット</dt><dd>増分バックアップで S3（リージョン単位）に保存。リージョン間コピー可能。スナップショットから作ったボリュームは<strong>初回アクセス時にブロックを遅延ロード</strong>するため初期性能が低い → <strong>高速スナップショット復元（FSR）</strong>を有効化するか、<code>fio</code>／<code>dd</code> で全ブロックを読み込んで初期化。</dd>
+      <dt>アーカイブ／ごみ箱</dt><dd>スナップショットアーカイブ層は長期保存を安価に（復元に時間がかかる）。ごみ箱（Recycle Bin）で誤削除したスナップショットや AMI を保持期間内なら復元可能。</dd>
+      <dt>Data Lifecycle Manager</dt><dd>タグを付けたボリュームのスナップショットや EBS-backed AMI の作成・保持・リージョン間コピーをポリシーで自動化（AWS Backup との違いは<a href="#d2-backup">第 2 章</a>）。</dd>
+      <dt>暗号化</dt><dd>リージョン単位で「EBS 暗号化をデフォルトにする」を有効化できる。<strong>既存の未暗号化ボリュームは直接暗号化できない</strong> → スナップショット作成 → 暗号化を指定してコピー → そこからボリューム作成 → 付け替え。</dd>
+      <dt>マルチアタッチ</dt><dd>io1/io2 のみ。同じ AZ の最大 16 台の Nitro インスタンスに同時接続。クラスター対応のファイルシステムやアプリ側の排他制御が必要（通常のファイル共有には EFS を使う）。</dd>
+    </dl>
+  </section>
+
+  <!-- ===== S3 performance ===== -->
+  <section class="sec" id="d1-s3">
+    <h3>S3 のパフォーマンス戦略とデータ転送 <span class="sk">1.3.3</span></h3>
+    <div class="prose">
+      <p>S3 は<strong>プレフィックスごとに 1 秒あたり PUT/COPY/POST/DELETE 3,500 件、GET/HEAD 5,500 件</strong>を処理でき、プレフィックスを分ければ並列にスケールします。性能の改善策は「アップロードを速くする」「ダウンロードを速くする」「大量データを移す」「保存コストを下げる」の 4 つに分けて覚えます。</p>
+    </div>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>課題</th><th>手段</th><th>要点</th></tr></thead>
+      <tbody>
+        <tr><td>大きなファイルのアップロード</td><td><strong>マルチパートアップロード</strong></td><td>100 MB を超えたら推奨、<strong>5 GB を超える単一 PUT は不可</strong>なので必須。パート（5 MiB〜5 GiB、最大 10,000 個）を並列送信し、失敗したパートだけ再送できる。未完了のアップロードはパートが残り課金されるため、<strong>ライフサイクルルールで「不完全なマルチパートアップロードの中止」</strong>を設定。</td></tr>
+        <tr><td>遠隔地からのアップロード</td><td><strong>S3 Transfer Acceleration</strong></td><td>CloudFront のエッジロケーションで受けて AWS のバックボーンで転送。バケット単位で有効化し、<code>バケット名.s3-accelerate.amazonaws.com</code> エンドポイントを使う。<strong>バケット名にピリオド不可</strong>（DNS 準拠名のみ）。高速化されなかった転送には追加料金がかからない。</td></tr>
+        <tr><td>大きなファイルのダウンロード</td><td>バイト範囲の取得（Range GET）</td><td>範囲を分けて並列に GET。失敗した範囲だけ再取得できる。</td></tr>
+        <tr><td>高頻度の読み取り</td><td>CloudFront、または ElastiCache</td><td>同じオブジェクトを何度も配信するならエッジにキャッシュ。</td></tr>
+        <tr><td>極めて低いレイテンシー</td><td>S3 Express One Zone（ディレクトリバケット）</td><td>単一 AZ で 1 桁ミリ秒。コンピューティングと同じ AZ に置く。</td></tr>
+        <tr><td>オンプレミスからの大量移行・定期同期</td><td><strong>AWS DataSync</strong></td><td>オンプレミスにエージェントを置き、NFS／SMB／HDFS／オブジェクトストレージから S3・EFS・FSx へ転送。暗号化、整合性検証、スケジュール、帯域制限を自動で扱う。</td></tr>
+        <tr><td>オンプレミスから継続的にアクセス</td><td>AWS Storage Gateway</td><td>S3 File Gateway（NFS／SMB で S3 に保存）、Volume Gateway、Tape Gateway。移行ではなく<strong>ハイブリッドで使い続ける</strong>ための仕組み。</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout pdf mt">
+      <span class="lbl">演習 PDF の論点（問題 25）</span>
+      <p>S3 へのアップロード高速化 → <strong>Transfer Acceleration</strong>。CloudFront はダウンロード配信のキャッシュ、VPC エンドポイントはプライベート接続、Global Accelerator は ALB・NLB・EC2 向けで、いずれも S3 アップロードの高速化策ではありません。</p>
+    </div>
+
+    <h4>ストレージクラスとライフサイクル</h4>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>ストレージクラス</th><th>AZ</th><th>最低保存期間</th><th>取り出し</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td>S3 Standard</td><td>3 以上</td><td>なし</td><td>即時</td><td>頻繁にアクセス</td></tr>
+        <tr><td>S3 Intelligent-Tiering</td><td>3 以上</td><td>なし</td><td>即時（任意のアーカイブ層は時間がかかる）</td><td>アクセスパターンが不明・変化する。少額のモニタリング料で自動階層化</td></tr>
+        <tr><td>S3 Standard-IA</td><td>3 以上</td><td>30 日</td><td>即時（取り出し料金あり）</td><td>月 1 回程度のアクセス</td></tr>
+        <tr><td>S3 One Zone-IA</td><td>1</td><td>30 日</td><td>即時</td><td>再作成可能な副次データ</td></tr>
+        <tr><td>S3 Glacier Instant Retrieval</td><td>3 以上</td><td>90 日</td><td>ミリ秒</td><td>四半期に 1 回程度だが即時に必要</td></tr>
+        <tr><td>S3 Glacier Flexible Retrieval</td><td>3 以上</td><td>90 日</td><td>迅速 1〜5 分／標準 3〜5 時間／一括 5〜12 時間</td><td>バックアップ・アーカイブ</td></tr>
+        <tr><td>S3 Glacier Deep Archive</td><td>3 以上</td><td>180 日</td><td>標準 12 時間以内／一括 48 時間以内</td><td>規制対応の長期保管。最安</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <figure class="fig mt">
+      <div class="canvas">
+      <svg viewBox="0 0 880 150" role="img" aria-label="ライフサイクルルールの例。作成後30日でStandard-IA、90日でGlacier Instant Retrieval、180日でDeep Archive、2555日で削除">
+        <defs><marker id="a-lc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <line class="s-l" x1="30" y1="70" x2="850" y2="70" marker-end="url(#a-lc)"/>
+        <circle class="f-acc" cx="40" cy="70" r="6"/><circle class="f-acc" cx="200" cy="70" r="6"/><circle class="f-acc" cx="380" cy="70" r="6"/><circle class="f-acc" cx="560" cy="70" r="6"/><circle class="f-bad" cx="780" cy="70" r="6"/>
+        <text class="s-mono" x="40" y="100" text-anchor="middle">0 日</text><text class="s-mono" x="200" y="100" text-anchor="middle">30 日</text><text class="s-mono" x="380" y="100" text-anchor="middle">90 日</text><text class="s-mono" x="560" y="100" text-anchor="middle">180 日</text><text class="s-mono" x="780" y="100" text-anchor="middle">2,555 日（7 年）</text>
+        <text class="s-tb" x="40" y="52" text-anchor="middle">Standard</text>
+        <text class="s-tb" x="200" y="52" text-anchor="middle">Standard-IA</text>
+        <text class="s-tb" x="380" y="52" text-anchor="middle">Glacier IR</text>
+        <text class="s-tb" x="560" y="52" text-anchor="middle">Deep Archive</text>
+        <text class="s-tb" x="780" y="52" text-anchor="middle">有効期限切れ（削除）</text>
+        <text class="s-ts" x="120" y="128" text-anchor="middle">Standard に 30 日以上置いてから IA へ</text>
+        <text class="s-ts" x="470" y="128" text-anchor="middle">各クラスの最低保存期間を満たさないと日割りの早期削除料金</text>
+      </svg>
+      </div>
+      <figcaption><b>ライフサイクルルールの例。</b>移行アクション（Transition）と有効期限アクション（Expiration）をプレフィックスやタグ単位で設定します。バージョニング有効時は「非現行バージョン」用の移行・削除ルールも別に設定できます。</figcaption>
+    </figure>
+    <div class="callout tip mt">
+      <span class="lbl">試験の着眼点</span>
+      <ul>
+        <li>アクセス頻度が<strong>予測できない</strong> → Intelligent-Tiering。予測できる（例：30 日後はほぼ参照しない）→ ライフサイクルルール。</li>
+        <li>どのデータがどのくらい読まれているか分からない → S3 Storage Lens やストレージクラス分析で把握してからルールを作る。</li>
+        <li>Standard-IA・One Zone-IA へは、Standard 等に<strong>最低 30 日</strong>置かないと移行できません。128 KB 未満の小さいオブジェクトは IA に移すとかえって割高です。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== Shared storage ===== -->
+  <section class="sec" id="d1-shared">
+    <h3>共有ストレージの選定と最適化 <span class="sk">1.3.4</span></h3>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>サービス</th><th>プロトコル</th><th>主なクライアント</th><th>選ぶ場面</th></tr></thead>
+      <tbody>
+        <tr><td>Amazon EFS</td><td>NFS v4.1/4.2</td><td>Linux の EC2、ECS、EKS、Lambda</td><td>複数 AZ のインスタンスで同じファイルを共有。容量は自動で伸縮しペタバイトまで</td></tr>
+        <tr><td>FSx for Windows File Server</td><td>SMB</td><td>Windows</td><td>Active Directory 連携、NTFS 権限、DFS が必要な Windows 共有</td></tr>
+        <tr><td>FSx for Lustre</td><td>Lustre</td><td>Linux（HPC・機械学習）</td><td>超高スループットの並列処理。S3 バケットとデータリポジトリとして連携。スクラッチ（一時）と永続の 2 種類</td></tr>
+        <tr><td>FSx for NetApp ONTAP</td><td>NFS・SMB・iSCSI</td><td>Linux・Windows・macOS</td><td>マルチプロトコル、スナップショット、SnapMirror。オンプレミスの NetApp からの移行</td></tr>
+        <tr><td>Amazon S3 Files</td><td>NFS（S3 バケットをマウント）</td><td>EC2、ECS、EKS、Lambda</td><td>S3 にあるデータをコピーせずファイルとして扱いたい。ファイル経由の変更はバケットに反映され、S3 API とも同時に使える</td></tr>
+        <tr><td>EBS マルチアタッチ</td><td>ブロック</td><td>同一 AZ の Nitro インスタンス</td><td>クラスター対応アプリ限定。一般的なファイル共有には不向き</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout new mt">
+      <span class="lbl">v1.1 追加：Amazon S3 Files（2026 年 4 月発表）</span>
+      <p>S3 バケットをファイルシステムとしてマウントできる機能です。EFS の技術を基盤とし、データは S3 から出ません。「S3 に置いた大量データを、既存のファイルベースのアプリや複数のコンピューティングから同時に扱いたい」という要件で選択肢になります。EFS は「ファイルシステムそのものを作る」、S3 Files は「既存の S3 データにファイルとしてアクセスする」という違いで区別します。</p>
+    </div>
+
+    <h4>EFS の設定項目</h4>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>設定</th><th>選択肢</th><th>判断基準</th></tr></thead>
+      <tbody>
+        <tr><td>スループットモード</td><td><strong>Elastic</strong>（推奨）／Provisioned／Bursting</td><td>Elastic は負荷に応じて自動で伸び、使った分だけ課金。急なスパイクがあるなら Elastic。常に高いスループットが必要で予測できるなら Provisioned。Bursting は容量に比例するクレジット制（<code>BurstCreditBalance</code> が尽きると遅くなる）。</td></tr>
+        <tr><td>パフォーマンスモード</td><td>General Purpose（推奨）／Max I/O</td><td>ほぼすべて General Purpose。Max I/O は旧来の高並列向けで、レイテンシーが高く Elastic や One Zone では使えない。</td></tr>
+        <tr><td>ストレージクラス</td><td>Standard／Infrequent Access（IA）／Archive、および One Zone</td><td>One Zone は単一 AZ で安価（AZ 障害で使えなくなる）。</td></tr>
+        <tr><td>ライフサイクル管理</td><td>N 日アクセスがなければ IA・Archive へ移動、アクセスされたら Standard へ戻す</td><td>アクセス頻度が下がるファイルのコストを自動で削減。<strong>スキル 1.3.4 で名指しされた最適化手段</strong>。</td></tr>
+        <tr><td>暗号化</td><td>保管時（作成時のみ設定可）／転送中（マウントヘルパーの TLS）</td><td>既存の未暗号化 EFS は暗号化できないので、新規作成してデータを移す（DataSync など）。</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <figure class="fig mt">
+      <div class="canvas">
+      <svg viewBox="0 0 860 280" role="img" aria-label="EFSのマウントターゲットはAZごとに1つ。同じAZの別サブネットのインスタンスもそのマウントターゲットを使う">
+        <defs><marker id="a-efs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <rect class="s-zone" x="10" y="10" width="840" height="200" rx="8"/><text class="s-tm" x="24" y="28">VPC</text>
+        <rect class="s-zone-fill" x="30" y="40" width="380" height="156" rx="6"/><text class="s-tb" x="44" y="60">AZ a</text>
+        <rect class="s-zone-fill" x="450" y="40" width="380" height="156" rx="6"/><text class="s-tb" x="464" y="60">AZ c</text>
+        <rect class="s-box" x="44" y="72" width="170" height="110" rx="5"/><text class="s-ts" x="54" y="90">サブネット a-1</text>
+        <rect class="s-box" x="228" y="72" width="168" height="110" rx="5"/><text class="s-ts" x="238" y="90">サブネット a-2</text>
+        <rect class="s-box" x="464" y="72" width="170" height="110" rx="5"/><text class="s-ts" x="474" y="90">サブネット c-1</text>
+        <rect class="s-box" x="648" y="72" width="168" height="110" rx="5"/><text class="s-ts" x="658" y="90">サブネット c-2</text>
+        <rect class="s-acc" x="64" y="110" width="130" height="40" rx="5"/><text class="s-tb" x="129" y="135" text-anchor="middle">マウントターゲット</text>
+        <rect class="s-box2" x="258" y="110" width="110" height="40" rx="5"/><text class="s-t" x="313" y="135" text-anchor="middle">EC2</text>
+        <rect class="s-acc" x="484" y="110" width="130" height="40" rx="5"/><text class="s-tb" x="549" y="135" text-anchor="middle">マウントターゲット</text>
+        <rect class="s-box2" x="678" y="110" width="110" height="40" rx="5"/><text class="s-t" x="733" y="135" text-anchor="middle">EC2</text>
+        <line class="s-l" x1="258" y1="130" x2="198" y2="130" marker-end="url(#a-efs)"/>
+        <line class="s-l" x1="678" y1="130" x2="618" y2="130" marker-end="url(#a-efs)"/>
+        <text class="s-ts" x="228" y="168" text-anchor="middle">NFS 2049</text><text class="s-ts" x="648" y="168" text-anchor="middle">NFS 2049</text>
+        <rect class="s-acc" x="330" y="228" width="200" height="44" rx="6"/><text class="s-tb" x="430" y="255" text-anchor="middle">EFS ファイルシステム（リージョン）</text>
+        <line class="s-l" x1="129" y1="150" x2="380" y2="224" marker-end="url(#a-efs)"/>
+        <line class="s-l" x1="549" y1="150" x2="480" y2="224" marker-end="url(#a-efs)"/>
+      </svg>
+      </div>
+      <figcaption><b>EFS のマウントターゲットは AZ ごとに 1 つだけ。</b>同じ AZ 内なら別サブネットのインスタンスも同じマウントターゲットを使えます。マウントターゲットのセキュリティグループで、クライアントからの NFS（TCP 2049）を許可します（演習 PDF 問題 8：「サブネットごと」ではなく「AZ ごと」）。</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== RDS performance ===== -->
+  <section class="sec" id="d1-rds">
+    <h3>RDS のパフォーマンス監視と改善 <span class="sk">1.3.5</span></h3>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>ツール</th><th>粒度と内容</th><th>使う場面</th></tr></thead>
+      <tbody>
+        <tr><td>CloudWatch メトリクス</td><td>ハイパーバイザー側から 1 分間隔：<code>CPUUtilization</code>・<code>FreeableMemory</code>・<code>FreeStorageSpace</code>・<code>DatabaseConnections</code>・<code>ReadIOPS</code>・<code>ReadLatency</code>・<code>DiskQueueDepth</code>・<code>ReplicaLag</code>・<code>SwapUsage</code></td><td>アラームの対象。ストレージ残量、接続数、レプリカ遅延の監視</td></tr>
+        <tr><td>拡張モニタリング</td><td>DB インスタンス上のエージェントが OS レベル（プロセスごとの CPU・メモリなど）を最短 1 秒間隔で収集し、CloudWatch Logs（<code>RDSOSMetrics</code>）へ</td><td>CPU の内訳、どのプロセスが重いか</td></tr>
+        <tr><td>Performance Insights → CloudWatch Database Insights</td><td>DB 負荷（平均アクティブセッション）を待機イベント・SQL・ホスト・ユーザー別に分解</td><td><strong>どの SQL がボトルネックか</strong>の特定。プロアクティブな推奨事項（異常の検知と対策案）</td></tr>
+        <tr><td>RDS Proxy</td><td>接続プールを管理するマネージドプロキシ</td><td>接続数の急増、Lambda からの大量接続、フェイルオーバー時間の短縮</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout new mt">
+      <span class="lbl">最新動向：Performance Insights から Database Insights へ</span>
+      <p>Performance Insights のコンソール体験は <strong>2026 年 7 月 31 日に終了</strong>し、CloudWatch Database Insights へ統合されます。Database Insights には <strong>Standard モード</strong>（従来の Performance Insights 相当）と <strong>Advanced モード</strong>（最大 15 か月の保持、フリート全体の監視、実行計画、オンデマンド分析）があります。Performance Insights の API は継続します。公式ガイドのスキル 1.3.5 は「Performance Insights」の名前のままなので、<strong>どちらの名前で出ても「SQL 単位で DB 負荷を分析する機能」</strong>と読み替えてください。</p>
+    </div>
+    <figure class="fig mt">
+      <div class="canvas">
+      <svg viewBox="0 0 860 210" role="img" aria-label="多数のアプリ接続をRDS Proxyが少数のDB接続に多重化し、フェイルオーバー時は新しいプライマリに接続を張り替える">
+        <defs><marker id="a-proxy" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <text class="s-tm" x="20" y="22">アプリ（Lambda・EC2・ECS）</text>
+        <rect class="s-box" x="20" y="34" width="120" height="26" rx="4"/><rect class="s-box" x="20" y="66" width="120" height="26" rx="4"/><rect class="s-box" x="20" y="98" width="120" height="26" rx="4"/><rect class="s-box" x="20" y="130" width="120" height="26" rx="4"/><rect class="s-box" x="20" y="162" width="120" height="26" rx="4"/>
+        <text class="s-ts" x="80" y="52" text-anchor="middle">接続 ×200</text><text class="s-ts" x="80" y="84" text-anchor="middle">接続 ×200</text><text class="s-ts" x="80" y="116" text-anchor="middle">接続 ×200</text><text class="s-ts" x="80" y="148" text-anchor="middle">接続 ×200</text><text class="s-ts" x="80" y="180" text-anchor="middle">接続 ×200</text>
+        <rect class="s-acc" x="300" y="60" width="200" height="100" rx="6"/><text class="s-tb" x="400" y="96" text-anchor="middle">RDS Proxy</text><text class="s-ts" x="400" y="116" text-anchor="middle">接続プール・多重化</text><text class="s-ts" x="400" y="134" text-anchor="middle">IAM 認証／Secrets Manager</text>
+        <line class="s-l" x1="140" y1="47" x2="296" y2="80" marker-end="url(#a-proxy)"/><line class="s-l" x1="140" y1="79" x2="296" y2="95" marker-end="url(#a-proxy)"/><line class="s-l" x1="140" y1="111" x2="296" y2="110" marker-end="url(#a-proxy)"/><line class="s-l" x1="140" y1="143" x2="296" y2="125" marker-end="url(#a-proxy)"/><line class="s-l" x1="140" y1="175" x2="296" y2="140" marker-end="url(#a-proxy)"/>
+        <rect class="s-box2" x="640" y="40" width="190" height="56" rx="6"/><text class="s-tb" x="735" y="64" text-anchor="middle">プライマリ</text><text class="s-ts" x="735" y="82" text-anchor="middle">実接続 ×100 程度</text>
+        <rect class="s-box" x="640" y="124" width="190" height="56" rx="6"/><text class="s-tb" x="735" y="148" text-anchor="middle">スタンバイ</text><text class="s-ts" x="735" y="166" text-anchor="middle">フェイルオーバー先</text>
+        <line class="s-l" x1="500" y1="96" x2="636" y2="70" marker-end="url(#a-proxy)"/>
+        <path class="s-l s-dash" d="M500 124 L636 150" marker-end="url(#a-proxy)"/>
+        <text class="s-ts" x="568" y="74" text-anchor="middle">再利用</text>
+        <text class="s-ts" x="568" y="160" text-anchor="middle">障害時に張り替え</text>
+      </svg>
+      </div>
+      <figcaption><b>RDS Proxy の効果。</b>アプリ側の接続は維持したまま、DB への実接続を少数に多重化します。接続確立のたびにかかる CPU・メモリの負荷を減らし、フェイルオーバー時はプロキシが新しいプライマリへ接続を張り替えるため、アプリから見た切り替え時間が短くなります。</figcaption>
+    </figure>
+    <dl class="kv mt">
+      <dt>配置</dt><dd>DB と同じ VPC に作成。DB の認証情報は Secrets Manager に置き、プロキシがそれを使って接続する。アプリはプロキシへ IAM 認証で接続できる。</dd>
+      <dt>ピン留め</dt><dd>セッション状態を変える SQL（<code>SET</code> 文など）やサイズの大きい文を使うと、そのセッションが特定の DB 接続に固定され、多重化の効果が落ちる。初期化クエリで設定するなどの工夫で避ける。</dd>
+      <dt>読み取りの分散</dt><dd>Aurora ではリーダーエンドポイント用のプロキシエンドポイントを作れる。</dd>
+    </dl>
+    <h4>症状から打ち手を選ぶ</h4>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>症状</th><th>まず見るもの</th><th>打ち手</th></tr></thead>
+      <tbody>
+        <tr><td>接続数の急増で CPU が高い</td><td><code>DatabaseConnections</code>、Database Insights</td><td>RDS Proxy、アプリ側の接続プール</td></tr>
+        <tr><td>特定の重い SQL</td><td>Database Insights の上位 SQL・待機イベント</td><td>インデックス追加、クエリ修正</td></tr>
+        <tr><td>読み取り負荷が高い</td><td><code>ReadIOPS</code>、CPU</td><td>リードレプリカを追加して読み取りを分散、ElastiCache でキャッシュ</td></tr>
+        <tr><td>ストレージ不足</td><td><code>FreeStorageSpace</code></td><td>ストレージの自動スケーリング（最大値を設定）</td></tr>
+        <tr><td>メモリ不足・スワップ</td><td><code>FreeableMemory</code>、<code>SwapUsage</code></td><td>インスタンスクラスを上げる（メモリ最適化 R 系）</td></tr>
+        <tr><td>I/O 待ち</td><td><code>DiskQueueDepth</code>、<code>ReadLatency</code>／<code>WriteLatency</code></td><td>gp3 の IOPS 追加、プロビジョンド IOPS（io2）</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout pdf mt">
+      <span class="lbl">演習 PDF の論点（問題 7）</span>
+      <p>ピーク時の接続数増加で CPU が上がり読み取り性能が落ちる → <strong>RDS Proxy</strong> と <strong>Database Insights（旧 Performance Insights）で SQL を特定して改善</strong>。マルチ AZ は可用性の仕組みで性能改善策ではなく、メトリクスフィルターはログの件数集計で DB 分析には使えません。</p>
+    </div>
+  </section>
+
+  <!-- ===== EC2 networking & placement ===== -->
+  <section class="sec" id="d1-ec2net">
+    <h3>EC2 のストレージ・ネットワーク機能とプレイスメントグループ <span class="sk">1.3.6</span></h3>
+    <figure class="fig">
+      <div class="canvas">
+      <svg viewBox="0 0 900 250" role="img" aria-label="クラスターは1つのAZの近接ラックに集める、分散は1台ずつ別ラック、パーティションはラック群ごとに区切る">
+        <text class="s-tb" x="150" y="22" text-anchor="middle">クラスター</text>
+        <text class="s-tb" x="450" y="22" text-anchor="middle">分散（スプレッド）</text>
+        <text class="s-tb" x="750" y="22" text-anchor="middle">パーティション</text>
+        <rect class="s-zone-fill" x="30" y="34" width="240" height="160" rx="6"/><text class="s-tm" x="42" y="52">1 つの AZ</text>
+        <rect class="s-box" x="70" y="64" width="160" height="110" rx="4"/>
+        <g class="f-acc"><rect x="86" y="80" width="28" height="18" rx="3"/><rect x="122" y="80" width="28" height="18" rx="3"/><rect x="158" y="80" width="28" height="18" rx="3"/><rect x="194" y="80" width="20" height="18" rx="3"/>
+        <rect x="86" y="106" width="28" height="18" rx="3"/><rect x="122" y="106" width="28" height="18" rx="3"/><rect x="158" y="106" width="28" height="18" rx="3"/><rect x="194" y="106" width="20" height="18" rx="3"/>
+        <rect x="86" y="132" width="28" height="18" rx="3"/><rect x="122" y="132" width="28" height="18" rx="3"/><rect x="158" y="132" width="28" height="18" rx="3"/><rect x="194" y="132" width="20" height="18" rx="3"/></g>
+        <text class="s-ts" x="150" y="168" text-anchor="middle">近接した低遅延ネットワーク</text>
+        <rect class="s-zone-fill" x="330" y="34" width="240" height="160" rx="6"/><text class="s-tm" x="342" y="52">AZ ごとに最大 7 台</text>
+        <rect class="s-box" x="346" y="64" width="44" height="110" rx="4"/><rect class="s-box" x="398" y="64" width="44" height="110" rx="4"/><rect class="s-box" x="450" y="64" width="44" height="110" rx="4"/><rect class="s-box" x="502" y="64" width="44" height="110" rx="4"/>
+        <rect class="f-acc" x="354" y="80" width="28" height="18" rx="3"/><rect class="f-acc" x="406" y="80" width="28" height="18" rx="3"/><rect class="f-acc" x="458" y="80" width="28" height="18" rx="3"/><rect class="f-acc" x="510" y="80" width="28" height="18" rx="3"/>
+        <text class="s-ts" x="450" y="168" text-anchor="middle">1 ラックに 1 台</text>
+        <rect class="s-zone-fill" x="630" y="34" width="240" height="160" rx="6"/><text class="s-tm" x="642" y="52">AZ ごとに最大 7 パーティション</text>
+        <rect class="s-box" x="646" y="64" width="64" height="110" rx="4"/><rect class="s-box" x="718" y="64" width="64" height="110" rx="4"/><rect class="s-box" x="790" y="64" width="64" height="110" rx="4"/>
+        <g class="f-acc"><rect x="654" y="80" width="22" height="16" rx="3"/><rect x="680" y="80" width="22" height="16" rx="3"/><rect x="654" y="102" width="22" height="16" rx="3"/><rect x="680" y="102" width="22" height="16" rx="3"/>
+        <rect x="726" y="80" width="22" height="16" rx="3"/><rect x="752" y="80" width="22" height="16" rx="3"/><rect x="726" y="102" width="22" height="16" rx="3"/><rect x="752" y="102" width="22" height="16" rx="3"/>
+        <rect x="798" y="80" width="22" height="16" rx="3"/><rect x="824" y="80" width="22" height="16" rx="3"/><rect x="798" y="102" width="22" height="16" rx="3"/><rect x="824" y="102" width="22" height="16" rx="3"/></g>
+        <text class="s-ts" x="678" y="140" text-anchor="middle">P1</text><text class="s-ts" x="750" y="140" text-anchor="middle">P2</text><text class="s-ts" x="822" y="140" text-anchor="middle">P3</text>
+        <text class="s-ts" x="750" y="168" text-anchor="middle">パーティション間でラックを共有しない</text>
+        <text class="s-t" x="150" y="220" text-anchor="middle">HPC・低遅延通信</text><text class="s-ts" x="150" y="238" text-anchor="middle">ラック障害で全滅しうる</text>
+        <text class="s-t" x="450" y="220" text-anchor="middle">少数の重要インスタンス</text><text class="s-ts" x="450" y="238" text-anchor="middle">同時障害の回避</text>
+        <text class="s-t" x="750" y="220" text-anchor="middle">HDFS・Cassandra・Kafka</text><text class="s-ts" x="750" y="238" text-anchor="middle">障害をパーティション単位に閉じ込める</text>
+      </svg>
+      </div>
+      <figcaption><b>プレイスメントグループの 3 方式。</b>四角はインスタンス、縦長の枠はラック（ハードウェア）を表します。クラスターは性能、分散とパーティションは障害の影響範囲を小さくするための配置です。</figcaption>
+    </figure>
+    <dl class="kv mt">
+      <dt>クラスターの容量不足</dt><dd>クラスタープレイスメントグループで <code>InsufficientInstanceCapacity</code> が出たら、グループ内のインスタンスを<strong>すべて停止してから起動し直す</strong>と、まとめて配置できる場所へ移る可能性があります。最初から必要台数を 1 回のリクエストで起動し、同じインスタンスタイプでそろえるのが原則。</dd>
+      <dt>拡張ネットワーキング（ENA）</dt><dd>現行世代のインスタンスで高帯域・低レイテンシーを実現するネットワークインターフェイス。ドライバーが必要。</dd>
+      <dt>EFA</dt><dd>Elastic Fabric Adapter。MPI などの HPC・機械学習のノード間通信向け。OS バイパスで低遅延。</dd>
+      <dt>ジャンボフレーム</dt><dd>VPC 内は MTU 9001 まで対応。インターネットや VPN 経由は 1500 以下になるため、経路の途中で MTU が下がる構成ではパケット分割や通信不良に注意。</dd>
+      <dt>EBS 最適化</dt><dd>現行世代は既定で EBS 専用帯域を持つ。インスタンスタイプごとに EBS 帯域・IOPS の上限があり、ボリュームより先にこちらが頭打ちになることがある。</dd>
+      <dt>インスタンスストア</dt><dd>物理ホストのローカルディスク。最速だが<strong>停止・終了・ホスト障害で消える</strong>。キャッシュや一時データ用。AMI 作成時にも中身は含まれない。</dd>
+      <dt>休止（Hibernate）</dt><dd>メモリの内容をルート EBS に保存して停止し、再開時に復元する。起動に時間のかかるアプリのウォームアップを省ける。ルートボリュームの暗号化が必要。</dd>
+    </dl>
+  </section>
+
+  <!-- ===== Cost tools ===== -->
+  <section class="sec" id="d1-cost">
+    <h3>クラウド財務管理ツール <span class="sk">1.3.1</span></h3>
+    <div class="prose">
+      <p>コストと TCO の「分析」そのものは受験対象者のタスク外とされていますが、Cost and Usage Reports・Cost Explorer・Savings Plans は対象サービスに含まれます。運用者としては「どのツールで何が分かるか」を区別できれば十分です。</p>
+    </div>
+    <div class="grid3 mt">
+      <div class="card"><span class="tag">可視化と予測</span><h5>Cost Explorer</h5><p>サービス・アカウント・タグ・使用タイプ別に最大過去 13 か月（設定で延長可）のコストをグラフ化し、将来を予測。Savings Plans／RI の購入推奨とサイズ適正化推奨も表示。</p></div>
+      <div class="card"><span class="tag">最も詳細なデータ</span><h5>Cost and Usage Reports（Data Exports）</h5><p>時間・リソース単位の明細を S3 に出力。Athena や QuickSight で分析。社内の課金配賦や独自ダッシュボードの基礎データ。</p></div>
+      <div class="card"><span class="tag">割引</span><h5>Savings Plans</h5><p>1 時間あたりの利用額をコミット。Compute（EC2・Fargate・Lambda に横断適用）と EC2 Instance（特定ファミリー）。使用率・カバー率は Cost Explorer で確認。</p></div>
+      <div class="card"><span class="tag">予算超過の通知</span><h5>AWS Budgets</h5><p>コスト・使用量・カバー率に予算を設定し、実績や予測がしきい値を超えたら通知。予算アクションで IAM ポリシーや SCP を適用して新規作成を止めることもできる。</p></div>
+      <div class="card"><span class="tag">異常の自動検知</span><h5>Cost Anomaly Detection</h5><p>機械学習で通常と異なる支出の急増を検知して通知。設定ミスによる想定外の課金に気付ける。</p></div>
+      <div class="card"><span class="tag">配賦</span><h5>コスト配分タグ</h5><p>タグを請求に反映させるには、請求コンソールで<strong>コスト配分タグとして有効化</strong>が必要。有効化以前のコストには遡って付かない。</p></div>
+    </div>
+  </section>
+</section>

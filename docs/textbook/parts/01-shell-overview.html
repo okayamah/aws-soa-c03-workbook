@@ -1,0 +1,311 @@
+<div class="shell">
+<aside class="toc" aria-label="目次">
+<span class="toc-title">目次</span>
+<nav>
+<ol>
+<li><a href="#overview"><span class="dot dx"></span>0. 試験の全体像</a>
+  <ol>
+  <li><a href="#exam-format">試験形式と採点</a></li>
+  <li><a href="#exam-domains">5分野と重み</a></li>
+  <li><a href="#exam-changes">C02→C03・v1.1 の変更点</a></li>
+  <li><a href="#strategy">解き方の型</a></li>
+  <li><a href="#plan">8週間計画との対応</a></li>
+  </ol>
+</li>
+<li><a href="#d1"><span class="dot d1"></span>1. モニタリング・修復・最適化</a>
+  <ol>
+  <li><a href="#d1-metrics">CloudWatch メトリクス</a></li>
+  <li><a href="#d1-alarms">アラームと複合アラーム</a></li>
+  <li><a href="#d1-dash">ダッシュボードとクロスアカウント</a></li>
+  <li><a href="#d1-logs">CloudWatch Logs</a></li>
+  <li><a href="#d1-agent">CloudWatch エージェント</a></li>
+  <li><a href="#d1-trail">CloudTrail</a></li>
+  <li><a href="#d1-obs">Prometheus・X-Ray・AI 監視</a></li>
+  <li><a href="#d1-sns">SNS 通知</a></li>
+  <li><a href="#d1-eb">EventBridge</a></li>
+  <li><a href="#d1-auto">修復の自動化と Automation</a></li>
+  <li><a href="#d1-ai">Kiro・DevOps Agent・Health</a></li>
+  <li><a href="#d1-compute">コンピューティング最適化</a></li>
+  <li><a href="#d1-ebs">EBS パフォーマンス</a></li>
+  <li><a href="#d1-s3">S3 パフォーマンス</a></li>
+  <li><a href="#d1-shared">共有ストレージ選定</a></li>
+  <li><a href="#d1-rds">RDS パフォーマンス</a></li>
+  <li><a href="#d1-ec2net">EC2・プレイスメントグループ</a></li>
+  <li><a href="#d1-cost">コストツール</a></li>
+  </ol>
+</li>
+<li><a href="#d2"><span class="dot d2"></span>2. 信頼性と事業継続性</a>
+  <ol>
+  <li><a href="#d2-asg">EC2 Auto Scaling</a></li>
+  <li><a href="#d2-cache">キャッシュ</a></li>
+  <li><a href="#d2-dbscale">DB のスケーリング</a></li>
+  <li><a href="#d2-elb">ELB とヘルスチェック</a></li>
+  <li><a href="#d2-r53hc">Route 53 ヘルスチェック</a></li>
+  <li><a href="#d2-multiaz">マルチ AZ と耐障害性</a></li>
+  <li><a href="#d2-backup">AWS Backup とスナップショット</a></li>
+  <li><a href="#d2-restore">DB の復元と RTO/RPO</a></li>
+  <li><a href="#d2-versioning">バージョニング</a></li>
+  <li><a href="#d2-dr">DR 戦略</a></li>
+  </ol>
+</li>
+<li><a href="#d3"><span class="dot d3"></span>3. デプロイ・自動化</a>
+  <ol>
+  <li><a href="#d3-ami">AMI と Image Builder</a></li>
+  <li><a href="#d3-containers">コンテナ（ECR/ECS/EKS）</a></li>
+  <li><a href="#d3-cfn">CloudFormation 基礎</a></li>
+  <li><a href="#d3-cfn-ops">変更セット・ドリフト・保護</a></li>
+  <li><a href="#d3-cfn-trouble">デプロイ失敗の修復</a></li>
+  <li><a href="#d3-cdk">AWS CDK</a></li>
+  <li><a href="#d3-multi">StackSets と RAM</a></li>
+  <li><a href="#d3-deploy">デプロイ戦略</a></li>
+  <li><a href="#d3-3rd">Terraform と Git</a></li>
+  <li><a href="#d3-ssm">Systems Manager</a></li>
+  <li><a href="#d3-event">イベント駆動型自動化</a></li>
+  </ol>
+</li>
+<li><a href="#d4"><span class="dot d4"></span>4. セキュリティとコンプライアンス</a>
+  <ol>
+  <li><a href="#d4-iam">IAM の機能</a></li>
+  <li><a href="#d4-eval">ポリシー評価ロジック</a></li>
+  <li><a href="#d4-iamtrouble">アクセス問題の調査</a></li>
+  <li><a href="#d4-org">マルチアカウント戦略</a></li>
+  <li><a href="#d4-ta">Trusted Advisor</a></li>
+  <li><a href="#d4-config">Config とコンプライアンス</a></li>
+  <li><a href="#d4-classify">データ分類</a></li>
+  <li><a href="#d4-kms">保管中の暗号化（KMS）</a></li>
+  <li><a href="#d4-tls">転送中の暗号化（ACM）</a></li>
+  <li><a href="#d4-secrets">シークレット管理</a></li>
+  <li><a href="#d4-findings">検出結果の集約と修復</a></li>
+  </ol>
+</li>
+<li><a href="#d5"><span class="dot d5"></span>5. ネットワークとコンテンツ配信</a>
+  <ol>
+  <li><a href="#d5-vpc">VPC の構成要素</a></li>
+  <li><a href="#d5-sgnacl">SG と NACL</a></li>
+  <li><a href="#d5-private">プライベート接続</a></li>
+  <li><a href="#d5-hybrid">TGW・VPN・ハイブリッド</a></li>
+  <li><a href="#d5-protect">ネットワーク保護サービス</a></li>
+  <li><a href="#d5-cost">ネットワークコスト最適化</a></li>
+  <li><a href="#d5-r53">Route 53 とルーティング</a></li>
+  <li><a href="#d5-resolver">Route 53 Resolver</a></li>
+  <li><a href="#d5-cf">CloudFront</a></li>
+  <li><a href="#d5-ga">Global Accelerator</a></li>
+  <li><a href="#d5-trouble">VPC トラブルシューティング</a></li>
+  <li><a href="#d5-logs">ネットワークログの読み方</a></li>
+  <li><a href="#d5-netmon">CloudWatch ネットワーク監視</a></li>
+  </ol>
+</li>
+<li><a href="#appendix"><span class="dot dx"></span>付録</a>
+  <ol>
+  <li><a href="#pdf-map">非公式演習 27 問の論点</a></li>
+  <li><a href="#numbers">暗記すべき数値</a></li>
+  <li><a href="#versus">紛らわしいサービス対比</a></li>
+  <li><a href="#quiz">確認問題 50 問</a></li>
+  <li><a href="#skills">スキル到達チェック</a></li>
+  <li><a href="#sources">出典</a></li>
+  </ol>
+</li>
+</ol>
+</nav>
+</aside>
+
+<main id="top">
+<header class="hero">
+  <span class="eyebrow">AWS Certified CloudOps Engineer – Associate · 試験ガイド v1.1 準拠</span>
+  <h1>CloudOps 教科書<span class="code">SOA-C03</span></h1>
+  <p class="lede">公式試験ガイドの 5 分野・13 タスク・53 スキルをすべて取り上げ、仕組みを図で示し、試験で問われる判断基準まで落とし込んだ学習用テキストです。各節の右肩にある <span class="sk-inline">1.1.3</span> のような番号は、公式ガイドのスキル番号に対応しています。</p>
+  <div class="tiles" role="list">
+    <div class="tile" role="listitem"><span class="k">問題数</span><span class="v">65<small>問</small></span><span class="n">採点 50 ＋ 採点外 15</span></div>
+    <div class="tile" role="listitem"><span class="k">試験時間</span><span class="v">130<small>分</small></span><span class="n">1 問あたり約 2 分</span></div>
+    <div class="tile" role="listitem"><span class="k">合格スコア</span><span class="v">720<small>/1000</small></span><span class="n">換算スコア・補整方式</span></div>
+    <div class="tile" role="listitem"><span class="k">受験料</span><span class="v">150<small>USD</small></span><span class="n">日本語で受験可</span></div>
+    <div class="tile" role="listitem"><span class="k">有効期間</span><span class="v">3<small>年</small></span><span class="n">DevOps Pro 合格で自動更新</span></div>
+  </div>
+  <details class="mobile-toc">
+    <summary>目次を開く</summary>
+    <ol>
+      <li><a href="#overview">試験の全体像</a></li>
+      <li><a href="#d1">分野 1 モニタリング・修復・最適化</a></li>
+      <li><a href="#d2">分野 2 信頼性と事業継続性</a></li>
+      <li><a href="#d3">分野 3 デプロイ・自動化</a></li>
+      <li><a href="#d4">分野 4 セキュリティとコンプライアンス</a></li>
+      <li><a href="#d5">分野 5 ネットワークとコンテンツ配信</a></li>
+      <li><a href="#appendix">付録（演習論点・数値・対比・確認問題・チェックリスト）</a></li>
+    </ol>
+  </details>
+</header>
+
+<!-- ================= Chapter 0 ================= -->
+<section class="chapter" id="overview">
+  <div class="chapter-head">
+    <span class="num"><span class="dot dx"></span>CHAPTER 0</span>
+    <h2>試験の全体像</h2>
+  </div>
+  <div class="prose">
+    <p>SOA-C03 は 2025 年 9 月 30 日に始まった、旧 SysOps Administrator – Associate（SOA-C02）の後継試験です。名称が「CloudOps Engineer」に変わり、コンテナ（ECS/EKS）、CDK、マルチアカウント運用、AI を使った運用支援が範囲に加わりました。試験は「設計する人」ではなく<strong>動いているワークロードを監視し、壊れたら直し、自動化で再発を防ぐ人</strong>を想定しています。設問の多くは「障害やエラーが起きている」「要件が追加された」という状況から始まり、最も運用負荷が小さく確実な対処を選ばせます。</p>
+  </div>
+
+  <section class="sec" id="exam-format">
+    <h3>試験形式と採点</h3>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>項目</th><th>内容</th><th>受験時に意識すること</th></tr></thead>
+      <tbody>
+        <tr><td>設問形式</td><td>択一選択（正解 1・誤答 3）／複数選択（5 つ以上の選択肢から 2 つ以上）</td><td>複数選択は「(2 つ選択)」の指定数を必ず確認。部分点はありません。</td></tr>
+        <tr><td>採点対象</td><td>65 問中 50 問が採点対象。15 問は将来の問題を評価するための採点対象外</td><td>どれが採点外かは分からないので全問に同じ力で取り組みます。見慣れない問題は採点外の可能性もあると割り切って時間をかけすぎないこと。</td></tr>
+        <tr><td>スコア</td><td>100〜1,000 の換算スコア。合格は 720</td><td>正答率 72% と完全には一致しません（問題の難易度差を均すための換算）。模試では 80% 以上を安定させるのが目安です。</td></tr>
+        <tr><td>合否判定</td><td>補整（compensatory）方式。分野ごとの足切りなし</td><td>苦手分野があっても総合点で合格できます。重みの大きい分野 1〜3 で取りこぼさないことが最優先です。</td></tr>
+        <tr><td>未回答</td><td>不正解扱い。推測回答にペナルティなし</td><td>必ずすべてに解答。迷った問題は「見直し」フラグを付けて先に進みます。</td></tr>
+        <tr><td>実技ラボ</td><td>なし（SOA-C02 の途中で廃止済み）</td><td>選択式のみ。ただし手順の正誤を問う設問が多いので、実機で操作した経験がそのまま効きます。</td></tr>
+        <tr><td>受験方法</td><td>Pearson VUE のテストセンターまたはオンライン監督</td><td>言語は英語・日本語・韓国語・簡体字中国語（韓国語と簡体字は 2026 年 11 月 19 日で終了予定）。</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout tip mt">
+      <span class="lbl">試験の着眼点</span>
+      <p>受験対象者は「AWS でのデプロイ・管理・ネットワーク・セキュリティに 1 年の経験」と定義されています。一方で、<strong>分散アーキテクチャの設計、CI/CD パイプラインの設計、ハイブリッドネットワークの設計、コスト・TCO 分析、請求管理</strong>は対象外のジョブタスクと明記されています。選択肢に「アーキテクチャを全面的に作り直す」案が出てきたら、運用者の仕事としては過剰な可能性が高いと考えます。</p>
+    </div>
+  </section>
+
+  <section class="sec" id="exam-domains">
+    <h3>5 分野と重み</h3>
+    <figure class="fig">
+      <div class="canvas">
+      <svg viewBox="0 0 700 250" role="img" aria-label="分野1〜3がそれぞれ22%、分野5が18%、分野4が16%。上位3分野で全体の66%を占める">
+        <line class="s-grid" x1="250" y1="12" x2="250" y2="214"/>
+        <line class="s-grid" x1="330" y1="12" x2="330" y2="214"/>
+        <line class="s-grid" x1="410" y1="12" x2="410" y2="214"/>
+        <line class="s-grid" x1="490" y1="12" x2="490" y2="214"/>
+        <line class="s-grid" x1="570" y1="12" x2="570" y2="214"/>
+        <line class="s-grid" x1="650" y1="12" x2="650" y2="214"/>
+        <text class="s-tm" x="250" y="232" text-anchor="middle">0%</text>
+        <text class="s-tm" x="330" y="232" text-anchor="middle">5%</text>
+        <text class="s-tm" x="410" y="232" text-anchor="middle">10%</text>
+        <text class="s-tm" x="490" y="232" text-anchor="middle">15%</text>
+        <text class="s-tm" x="570" y="232" text-anchor="middle">20%</text>
+        <text class="s-tm" x="650" y="232" text-anchor="middle">25%</text>
+        <g class="bar-hit"><title>分野1 モニタリング・ログ・分析・修復・パフォーマンス最適化: 22%（約11問）</title>
+        <text class="s-t" x="240" y="34" text-anchor="end">1 モニタリング・修復・最適化</text>
+        <path class="f-d1" d="M250 20 h348 a4 4 0 0 1 4 4 v12 a4 4 0 0 1 -4 4 h-348 z"/>
+        <text class="s-tb" x="610" y="35">22%</text></g>
+        <g class="bar-hit"><title>分野2 信頼性と事業の継続性: 22%（約11問）</title>
+        <text class="s-t" x="240" y="74" text-anchor="end">2 信頼性と事業継続性</text>
+        <path class="f-d2" d="M250 60 h348 a4 4 0 0 1 4 4 v12 a4 4 0 0 1 -4 4 h-348 z"/>
+        <text class="s-tb" x="610" y="75">22%</text></g>
+        <g class="bar-hit"><title>分野3 デプロイ・プロビジョニング・オートメーション: 22%（約11問）</title>
+        <text class="s-t" x="240" y="114" text-anchor="end">3 デプロイ・自動化</text>
+        <path class="f-d3" d="M250 100 h348 a4 4 0 0 1 4 4 v12 a4 4 0 0 1 -4 4 h-348 z"/>
+        <text class="s-tb" x="610" y="115">22%</text></g>
+        <g class="bar-hit"><title>分野4 セキュリティとコンプライアンス: 16%（約8問）</title>
+        <text class="s-t" x="240" y="154" text-anchor="end">4 セキュリティとコンプライアンス</text>
+        <path class="f-d4" d="M250 140 h252 a4 4 0 0 1 4 4 v12 a4 4 0 0 1 -4 4 h-252 z"/>
+        <text class="s-tb" x="514" y="155">16%</text></g>
+        <g class="bar-hit"><title>分野5 ネットワークとコンテンツ配信: 18%（約9問）</title>
+        <text class="s-t" x="240" y="194" text-anchor="end">5 ネットワークとコンテンツ配信</text>
+        <path class="f-d5" d="M250 180 h284 a4 4 0 0 1 4 4 v12 a4 4 0 0 1 -4 4 h-284 z"/>
+        <text class="s-tb" x="546" y="195">18%</text></g>
+        <line class="s-axis" x1="250" y1="12" x2="250" y2="214"/>
+      </svg>
+      </div>
+      <figcaption><b>採点対象 50 問の配分。</b>分野 1〜3 で 66%（約 33 問）を占めます。分野ごとの問題数は 22% ≒ 11 問、18% ≒ 9 問、16% ≒ 8 問が目安です。</figcaption>
+    </figure>
+
+    <ul class="tasks mt" aria-label="タスク一覧">
+      <li><span class="tid"><span class="dot d1"></span> 1.1</span><span><a href="#d1-metrics">メトリクス・アラーム・フィルターを実装する</a><span class="skills">CloudWatch／CloudTrail／Managed Prometheus、CloudWatch エージェント（EC2・ECS・EKS）、アラームと EventBridge、クロスアカウントダッシュボード、SNS</span></span></li>
+      <li><span class="tid"><span class="dot d1"></span> 1.2</span><span><a href="#d1-auto">メトリクスから問題を特定し修復する</a><span class="skills">修復の自動化（Lambda・Systems Manager・Kiro・DevOps Agent）、EventBridge のルール調査、Automation ランブック</span></span></li>
+      <li><span class="tid"><span class="dot d1"></span> 1.3</span><span><a href="#d1-compute">パフォーマンス最適化</a><span class="skills">コンピューティング、EBS、S3（DataSync・Transfer Acceleration・マルチパート）、共有ストレージ（EFS・FSx・S3 Files）、RDS（Performance Insights・RDS Proxy）、プレイスメントグループ</span></span></li>
+      <li><span class="tid"><span class="dot d2"></span> 2.1</span><span><a href="#d2-asg">スケーラビリティと伸縮性</a><span class="skills">コンピューティングのスケーリング、CloudFront／ElastiCache のキャッシュ、RDS・DynamoDB のスケーリング</span></span></li>
+      <li><span class="tid"><span class="dot d2"></span> 2.2</span><span><a href="#d2-elb">高可用性とレジリエンス</a><span class="skills">ELB と Route 53 のヘルスチェック、マルチ AZ</span></span></li>
+      <li><span class="tid"><span class="dot d2"></span> 2.3</span><span><a href="#d2-backup">バックアップと復元</a><span class="skills">AWS Backup、ポイントインタイム復元と RTO/RPO、S3・FSx のバージョニング、DR 戦略 4 種</span></span></li>
+      <li><span class="tid"><span class="dot d3"></span> 3.1</span><span><a href="#d3-ami">プロビジョニングと保守</a><span class="skills">AMI／コンテナイメージ（Image Builder）、CloudFormation と CDK、デプロイ問題の修復、StackSets と RAM、デプロイ戦略、Terraform と Git</span></span></li>
+      <li><span class="tid"><span class="dot d3"></span> 3.2</span><span><a href="#d3-ssm">既存リソース管理の自動化</a><span class="skills">Systems Manager、Lambda・S3 イベント通知・EventBridge・DevOps Agent によるイベント駆動</span></span></li>
+      <li><span class="tid"><span class="dot d4"></span> 4.1</span><span><a href="#d4-iam">セキュリティツールとポリシー</a><span class="skills">IAM 機能、CloudTrail・Access Analyzer・Policy Simulator、Organizations・SCP・Identity Center、Trusted Advisor、Config コンフォーマンスパック</span></span></li>
+      <li><span class="tid"><span class="dot d4"></span> 4.2</span><span><a href="#d4-classify">データとインフラの保護</a><span class="skills">データ分類、KMS、ACM、シークレット保管、Security Hub・GuardDuty・Config・Inspector・Security Agent の結果修復</span></span></li>
+      <li><span class="tid"><span class="dot d5"></span> 5.1</span><span><a href="#d5-vpc">ネットワーク機能と接続</a><span class="skills">VPC 構成要素、VPC エンドポイント・PrivateLink・ピアリング、DNS Firewall・WAF・Shield・Network Firewall の監査、ネットワークのコスト最適化</span></span></li>
+      <li><span class="tid"><span class="dot d5"></span> 5.2</span><span><a href="#d5-r53">ドメイン・DNS・コンテンツ配信</a><span class="skills">Route 53 Resolver、ルーティングポリシーとクエリログ、CloudFront と Global Accelerator</span></span></li>
+      <li><span class="tid"><span class="dot d5"></span> 5.3</span><span><a href="#d5-trouble">ネットワーク接続のトラブルシューティング</a><span class="skills">VPC 設定、各種ネットワークログ、CloudFront キャッシュ、ハイブリッド／プライベート接続、CloudWatch ネットワーク監視</span></span></li>
+    </ul>
+  </section>
+
+  <section class="sec" id="exam-changes">
+    <h3>SOA-C02 からの変更と v1.1 改訂</h3>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>SOA-C02 の分野</th><th class="num">C02</th><th>SOA-C03 の分野</th><th class="num">C03</th><th>読み取れること</th></tr></thead>
+      <tbody>
+        <tr><td>1 モニタリング、ロギング、修復</td><td class="num">20%</td><td>1 モニタリング、ログ記録、分析、修復、パフォーマンスの最適化</td><td class="num">22%</td><td>旧分野 6（コスト・パフォーマンス）のタスクがここへ移動</td></tr>
+        <tr><td>2 信頼性と事業の継続性</td><td class="num">16%</td><td>2 信頼性と事業の継続性</td><td class="num">22%</td><td>重みが最も大きく増加（+6pt）</td></tr>
+        <tr><td>3 デプロイ、プロビジョニング、オートメーション</td><td class="num">18%</td><td>3 デプロイ、プロビジョニング、オートメーション</td><td class="num">22%</td><td>CDK・コンテナイメージが追加</td></tr>
+        <tr><td>4 セキュリティとコンプライアンス</td><td class="num">16%</td><td>4 セキュリティとコンプライアンス</td><td class="num">16%</td><td>VPN は分野 5 へ移動</td></tr>
+        <tr><td>5 ネットワークとコンテンツ配信</td><td class="num">18%</td><td>5 ネットワークとコンテンツ配信</td><td class="num">18%</td><td>CloudWatch ネットワーク監視が追加、S3 静的ウェブホスティングは削除</td></tr>
+        <tr><td>6 コストとパフォーマンスの最適化</td><td class="num">12%</td><td>（分野 1 のタスク 1.3 に統合）</td><td class="num">—</td><td>コスト単独の分野は消滅。ただし Cost Explorer・Savings Plans 等は対象サービスに残る</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout new mt">
+      <span class="lbl">v1.1（2026 年 6 月 1 日公開）で追加・明確化された内容</span>
+      <ul>
+        <li><strong>対象サービスに追加</strong>：Amazon Bedrock、AWS DevOps Agent、AWS Health Dashboard、Kiro、AWS Security Agent。</li>
+        <li>1.1.1 の監視対象に「サーバーレス・コンピューティング・<strong>AI ワークロード</strong>」が明記。</li>
+        <li>1.2.1 の修復自動化の例が「Kiro、AWS DevOps Agent」に。3.2.2 のイベント駆動の例にも <strong>EventBridge と DevOps Agent</strong> が追加。</li>
+        <li>1.3.4 の共有ストレージに <strong>Amazon S3 Files</strong>（S3 バケットをファイルシステムとしてマウント）が追加。</li>
+        <li>2.3.4 が「DR 手順を実行」から「<strong>バックアップと復元・パイロットライト・ウォームスタンバイ・アクティブ/アクティブ</strong>のベストプラクティスに従う」へ具体化。</li>
+        <li>4.1.3 に Organizations・SCP・Identity Center、4.1.5 に <strong>Config コンフォーマンスパック</strong>、4.2.5 に Security Agent、5.1.2 に VPC エンドポイント・PrivateLink・ピアリングが例示。</li>
+      </ul>
+      <p>改訂版は試験への反映の少なくとも 1 か月前に公開されるため、2026 年 7 月以降の本試験は v1.1 が前提です。新規追加の AI 系サービスは出題実績が少ないので、本書では「何をするサービスか」「既存のどの手段と組み合わせるか」を押さえる水準で扱います。</p>
+    </div>
+    <div class="callout trap">
+      <span class="lbl">ひっかけ注意：対象外サービス</span>
+      <p>次のサービスは<strong>公式に対象外</strong>です。選択肢に登場した場合は、ほぼ不正解の候補として扱えます：Amazon FSx for OpenZFS、AWS CloudHSM、Amazon Security Lake、AWS Signer、AWS App Mesh、AWS Cloud WAN、AWS AppConfig、Amazon Lightsail、AWS Application Migration Service、AWS Transfer Family、Amazon Neptune、Amazon Timestream、Amazon MSK、Amazon EMR など。</p>
+    </div>
+  </section>
+
+  <section class="sec" id="strategy">
+    <h3>解き方の型</h3>
+    <div class="prose">
+      <p>SOA-C03 の設問は、長い状況説明の最後に「最も運用効率が高い方法は」「最もコスト効率が高い方法は」といった<strong>評価軸</strong>が付きます。複数の選択肢が技術的には動くため、評価軸に合わないものを落としていくのが基本の解き方です。</p>
+    </div>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>設問の言い回し</th><th>選ぶべき方向</th><th>落とすべき選択肢</th></tr></thead>
+      <tbody>
+        <tr><td>最も運用上のオーバーヘッドが少ない／最も運用効率が高い</td><td>マネージド機能、既存サービスの設定変更、事前定義ランブック（<code>AWS-</code> / <code>AWSSupport-</code>）</td><td>EC2 上にスクリプトを置いて cron で回す、自前で Lambda を一から書く、手作業の繰り返し</td></tr>
+        <tr><td>最もコスト効率が高い</td><td>既存の仕組みのチューニング（Auto Scaling、ライフサイクル、ストレージクラス変更、ゲートウェイ型エンドポイント）</td><td>DAX・io2・Shield Advanced・NAT Gateway 追加など「高性能だが高価」な案</td></tr>
+        <tr><td>できるだけ早く／即時に</td><td>無効化（Invalidation）、Patch now、オンデマンド実行、フェイルオーバーの手動実行</td><td>TTL 切れを待つ、次回のメンテナンスウィンドウを待つ</td></tr>
+        <tr><td>自動的に／人手を介さず</td><td>EventBridge ルール → ターゲット、Config 自動修復、アラームアクション、State Manager</td><td>「通知を受けた担当者が手動で〜」</td></tr>
+        <tr><td>監査要件／証跡</td><td>CloudTrail（誰が・いつ・どの API）と Config（リソースの設定がどう変わったか）を使い分け</td><td>CloudWatch メトリクスで代用する案</td></tr>
+        <tr><td>最小権限</td><td>IAM ロール＋条件キー、権限境界、SCP で上限</td><td>アクセスキーを EC2 に保存、<code>*</code> の付与、ルートユーザーの使用</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <ol class="ladder mt" aria-label="1問を解く手順">
+      <li><div><span class="q">最後の 1 文（問い）を先に読む</span><p class="a">「2 つ選択」「最もコスト効率」など、答えの数と評価軸を確定させます。</p></div></li>
+      <li><div><span class="q">状況説明から「制約」を抜き出す</span><p class="a">リージョン数、マルチ AZ か、暗号化の有無、既存サービス（ASG・ALB・CloudFront など）、予測可能な負荷か否か。ここに正解の根拠がほぼ書かれています。</p></div></li>
+      <li><div><span class="q">存在しない機能・ありえない操作を消す</span><p class="a">「実行中のまま AZ を移動」「CloudWatch 標準メトリクスでメモリ使用率」「SG で明示的に拒否」など、仕様上できない操作は即除外。</p></div></li>
+      <li><div><span class="q">残りを評価軸で比べる</span><p class="a">運用負荷・コスト・即時性・安全性のどれを問われているかで 1 つに絞ります。</p></div></li>
+      <li><div><span class="q">2 分を超えたらフラグを立てて次へ</span><p class="a">最後に見直し時間を 15〜20 分残す配分が目安です。</p></div></li>
+    </ol>
+  </section>
+
+  <section class="sec" id="plan">
+    <h3>8 週間計画との対応</h3>
+    <div class="prose">
+      <p>このリポジトリの学習計画（<code>docs/plan/SOA-C03_LearningPlan.md</code>）と FastAPI ToDo アプリのロードマップに、本書の章を対応させました。週のテーマを始める前に該当章を読み、ハンズオンの後に章末の確認問題を解く流れを想定しています。</p>
+    </div>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>週</th><th>テーマ</th><th>アプリへの変更</th><th>本書の章</th></tr></thead>
+      <tbody>
+        <tr><td>Week 0</td><td>環境構築</td><td>—</td><td><a href="#overview">第 0 章</a>、<a href="#skills">スキル到達チェック</a></td></tr>
+        <tr><td>Week 1</td><td>監視・運用</td><td>API Gateway + Lambda + DynamoDB、CloudWatch Logs・Alarm・Dashboard</td><td><a href="#d1-metrics">1.1</a>、<a href="#d1-sns">SNS</a>、<a href="#d1-eb">EventBridge</a></td></tr>
+        <tr><td>Week 2</td><td>自動化・IaC</td><td>全リソースの CloudFormation 化、変更セット、ドリフト、Parameter Store</td><td><a href="#d3-cfn">3.1 CloudFormation</a>、<a href="#d3-ssm">Systems Manager</a>、<a href="#d1-auto">1.2</a></td></tr>
+        <tr><td>Week 3</td><td>信頼性・DR</td><td>ECS Fargate + ALB、DynamoDB に AWS Backup、RDS Multi-AZ 練習</td><td><a href="#d2">第 2 章</a>全体</td></tr>
+        <tr><td>Week 4</td><td>ネットワーク</td><td>VPC（Public/Private）、CloudFront、VPC エンドポイント</td><td><a href="#d5">第 5 章</a>全体</td></tr>
+        <tr><td>Week 5</td><td>セキュリティ＋コンテナ</td><td>IAM 最小権限、KMS、Secrets Manager、X-Ray</td><td><a href="#d4">第 4 章</a>、<a href="#d3-containers">コンテナ</a>、<a href="#d1-obs">X-Ray</a></td></tr>
+        <tr><td>Week 6〜7</td><td>演習</td><td>—</td><td><a href="#quiz">確認問題</a>、<a href="#pdf-map">演習論点マップ</a>、<a href="#versus">対比表</a></td></tr>
+        <tr><td>Week 8</td><td>最終調整</td><td>—</td><td><a href="#numbers">暗記すべき数値</a>、<a href="#skills">スキル到達チェック</a></td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+</section>

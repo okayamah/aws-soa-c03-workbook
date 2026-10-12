@@ -1,0 +1,669 @@
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- storage (per-viewer convenience only) ---------- */
+  var store = {
+    get: function (k, d) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+    set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } }
+  };
+
+  /* ---------- quiz data ---------- */
+  var Q = [
+    // ===== Domain 1 =====
+    { d: 1, q: "Linux の EC2 インスタンス 40 台で、メモリ使用率が 85% を超えたら運用チームへ通知したい。今後追加されるインスタンスにも自動で適用したい。最も運用負荷が小さい方法はどれか。",
+      o: ["EC2 の詳細モニタリングを有効化し、MemoryUtilization メトリクスにアラームを設定する",
+          "Systems Manager の State Manager で CloudWatch エージェントの導入と設定（Parameter Store に保存）を関連付けで適用し、mem_used_percent にアラームを作成して SNS に通知する",
+          "各インスタンスの cron で free コマンドの結果を PutMetricData で送信するスクリプトを配置する",
+          "VPC フローログを有効化し、メトリクスフィルターでメモリ使用率を抽出する"],
+      a: [1], r: "d1-agent",
+      e: "メモリは OS 内部の値なので標準メトリクスに存在せず、CloudWatch エージェントが必要です。設定を Parameter Store に置き、State Manager の関連付けで適用すれば新しいインスタンスにも自動で反映されます。cron スクリプトでも可能ですが運用負荷が大きく、フローログにはメモリ情報がありません。" },
+    { d: 1, q: "CloudWatch アラームは ALARM 状態に遷移しているが、SNS トピックの購読者にメールが届かない。トピックは AWS マネージドキー（aws/sns）でサーバー側暗号化されている。購読は確認済みである。どうすればよいか。",
+      o: ["アラームの評価期間を短くする",
+          "トピックの暗号化をカスタマーマネージドキーに変更し、キーポリシーで cloudwatch.amazonaws.com に kms:Decrypt と kms:GenerateDataKey* を許可する",
+          "SNS トピックを FIFO トピックに作り直す",
+          "アラームのアクションを EC2 アクションに変更する"],
+      a: [1], r: "d1-alarms",
+      e: "暗号化されたトピックへ CloudWatch が発行するには、キーポリシーで CloudWatch のサービスプリンシパルに KMS の使用を許可する必要があります。AWS マネージドキーのキーポリシーは変更できないため、カスタマーマネージドキーへ切り替えます。" },
+    { d: 1, q: "CPU 使用率の一時的な上昇でアラームが頻繁に鳴り、担当者が疲弊している。CPU 使用率が高く、かつ ALB の 5XX エラーも増えているときだけ担当者を呼び出したい。最も適切な方法はどれか。",
+      o: ["2 つのメトリクスをメトリクス数式で合計し、その結果にアラームを設定する",
+          "既存の 2 つのアラームを AND 条件で組み合わせた複合アラームを作成し、複合アラームにだけ SNS 通知を設定する",
+          "2 つのアラームに同じ SNS トピックを設定する",
+          "CPU 使用率のアラームを異常検出に変更する"],
+      a: [1], r: "d1-alarms",
+      e: "複数アラームの状態を論理式で組み合わせ、ノイズを減らすのが複合アラームの目的です。メトリクス数式の合計では「両方が高い」を表現できず、同じトピックに通知するだけでは通知回数が増えるだけです。" },
+    { d: 1, q: "アプリケーションログに出力される「PaymentTimeout」という文字列が 5 分間に 10 回以上出現したら通知したい。ログは CloudWatch Logs に送信済みである。最も簡単な方法はどれか。",
+      o: ["ロググループにメトリクスフィルターを作成し、生成されたメトリクスにアラームと SNS 通知を設定する",
+          "サブスクリプションフィルターで Lambda に送り、Lambda で件数を数えてメール送信する",
+          "ロググループを S3 にエクスポートし、Athena で 5 分ごとに集計する",
+          "Logs Insights のクエリを手動で実行して件数を確認する"],
+      a: [0], r: "d1-logs",
+      e: "文字列の出現回数をメトリクス化するのがメトリクスフィルターで、そのままアラームを設定できます。Lambda を使う方法も動きますが、作り込みが必要です。エクスポートはリアルタイムではありません。" },
+    { d: 1, q: "30 の AWS アカウントにまたがるアプリケーションのメトリクスとログを、運用チームが 1 つのアカウントからダッシュボードで横断的に確認し、アラームも作成できるようにしたい。最も適切な方法はどれか。",
+      o: ["各アカウントで Lambda を実行し、メトリクスを中央アカウントへ PutMetricData でコピーする",
+          "CloudWatch クロスアカウントオブザーバビリティを設定し、中央をモニタリングアカウント、各アカウントをソースアカウントとしてリンクする",
+          "運用チーム用の IAM ユーザーを全アカウントに作成し、各アカウントのコンソールで確認する",
+          "全アカウントの CloudWatch Logs を S3 にエクスポートし、QuickSight で可視化する"],
+      a: [1], r: "d1-dash",
+      e: "クロスアカウントオブザーバビリティはメトリクス・ログ・トレースをモニタリングアカウントで横断的に扱えるマネージド機能で、Organizations の OU 単位でも設定できます。" },
+    { d: 1, q: "EC2 インスタンスが停止したら Lambda 関数を起動するため、EventBridge のカスタムイベントバス「ops-bus」に EC2 の状態変化を検知するルールを作成した。パターンは正しいが、ルールが一度も一致しない。原因として最も可能性が高いのはどれか。",
+      o: ["Lambda 関数のタイムアウトが短すぎる",
+          "AWS サービスのイベントは既定のイベントバスに届くため、ルールを既定のイベントバスに作成する必要がある",
+          "CloudTrail の証跡が作成されていない",
+          "ルールのターゲットが 5 つを超えている"],
+      a: [1], r: "d1-eb",
+      e: "EC2 の状態変化などの AWS サービスイベントは、発生したリージョンの既定のイベントバスに送られます。カスタムバスのルールには届きません。EC2 の状態変化通知はサービスイベントなので、CloudTrail の証跡は不要です。" },
+    { d: 1, q: "EC2 のルートボリュームの空き容量が 10% を切ったら、古いアプリログを削除する手順を自動で実行したい。手順はインスタンス上のシェルコマンドで、実行結果も記録したい。最も適切な構成はどれか。",
+      o: ["disk_used_percent のアラームの状態変化を EventBridge ルールで受け、Systems Manager Automation ランブック（aws:runCommand ステップでコマンドを実行）をターゲットにする",
+          "アラームのアクションとして Systems Manager Run Command を直接指定する",
+          "アラームから SNS でメールを送り、担当者が SSH で削除する",
+          "AWS Health のイベントで Lambda を起動して削除する"],
+      a: [0], r: "d1-auto",
+      e: "アラームが直接呼べるのは SNS・EC2・Auto Scaling・Lambda・Systems Manager（OpsItem 等）で、Run Command を直接は指定できません。状態変化イベントを EventBridge で受けて Automation を実行すれば、実行履歴も残ります。" },
+    { d: 1, q: "AWS Compute Optimizer の EC2 の推奨事項が、メモリ不足のリスクを考慮していないように見える。推奨事項の精度を上げるために最初に行うべきことはどれか。",
+      o: ["拡張インフラストラクチャメトリクスを無効にする",
+          "CloudWatch エージェントでメモリ使用率を CloudWatch に送信する",
+          "Trusted Advisor のチェックを更新する",
+          "Cost Explorer のサイズ適正化推奨を有効にする"],
+      a: [1], r: "d1-compute",
+      e: "Compute Optimizer は CloudWatch のメトリクスを分析します。メモリは標準メトリクスにないため、エージェントで送信すると推奨に反映されます。分析期間を延ばしたいなら拡張インフラストラクチャメトリクスを有効にします。" },
+    { d: 1, q: "500 GiB の gp2 ボリュームを使う DB サーバーで、夜間バッチの途中から急に I/O 性能が落ちる。BurstBalance メトリクスが 0 になっていた。ダウンタイムなしで、最もコスト効率よく解決する方法はどれか。",
+      o: ["Elastic Volumes で gp3 に変更し、必要な IOPS とスループットを指定する",
+          "io2 Block Express のボリュームを新規作成してデータを移行する",
+          "スナップショットからボリュームを作り直す",
+          "インスタンスを停止して、より大きなインスタンスタイプに変更する"],
+      a: [0], r: "d1-ebs",
+      e: "gp2 は 1 TiB 未満だとクレジットでバーストし、尽きるとベースライン（3 IOPS/GiB）まで落ちます。gp3 はサイズと無関係に 3,000 IOPS のベースラインがあり、IOPS を独立して追加でき、gp2 より安価です。Elastic Volumes ならオンラインで変更できます。" },
+    { d: 1, m: true, q: "世界各地の拠点から、1 ファイル 10 GB 程度の動画を東京リージョンの S3 バケットへアップロードしている。転送が遅く、途中で失敗するとやり直しになる。改善策として適切なものを 2 つ選べ。",
+      o: ["マルチパートアップロードを使用する",
+          "S3 Transfer Acceleration を有効化し、高速化エンドポイントを使用する",
+          "CloudFront ディストリビューションを作成し、キャッシュを有効にする",
+          "アップロード先のストレージクラスを Glacier Deep Archive にする",
+          "S3 用のゲートウェイ型 VPC エンドポイントを作成する"],
+      a: [0, 1], r: "d1-s3",
+      e: "5 GB を超えるファイルはマルチパートが必須で、並列化と失敗パートだけの再送ができます。遠隔地からのアップロードは Transfer Acceleration でエッジ経由にすると速くなります。CloudFront のキャッシュはダウンロード向け、ゲートウェイ型エンドポイントは VPC 内からの経路です。" },
+    { d: 1, q: "Lambda 関数から RDS for MySQL へ接続しているアプリで、アクセスが集中すると「Too many connections」エラーが発生する。アプリの変更を最小限にして解決する方法はどれか。",
+      o: ["RDS のマルチ AZ 配置を有効化する",
+          "RDS Proxy を作成し、Lambda の接続先をプロキシのエンドポイントに変更する",
+          "リードレプリカを 3 台追加する",
+          "Lambda の予約同時実行数を 0 に設定する"],
+      a: [1], r: "d1-rds",
+      e: "RDS Proxy は接続をプールして多重化し、短命な接続が大量に来るワークロード（Lambda など）での接続枯渇を防ぎます。マルチ AZ は可用性の仕組み、予約同時実行数 0 は関数自体が動かなくなります。" },
+
+    // ===== Domain 2 =====
+    { d: 2, q: "ALB の背後の Auto Scaling グループで、アプリのプロセスが停止したインスタンスに ALB はリクエストを送らなくなったが、ASG はそのインスタンスを置き換えない。どうすればよいか。",
+      o: ["ASG のヘルスチェックの種類に ELB を追加する",
+          "ターゲットグループの登録解除の遅延を 0 秒にする",
+          "ASG の最大キャパシティを増やす",
+          "ALB のクロスゾーン負荷分散を無効にする"],
+      a: [0], r: "d2-asg",
+      e: "ASG の既定のヘルスチェックは EC2 ステータスチェックだけで、OS が動いていれば正常と判断します。ELB ヘルスチェックを有効にすると、ターゲットグループで異常になったインスタンスを置き換えます。" },
+    { d: 2, q: "新しい AMI に切り替えてから、ASG のインスタンスが起動直後に異常と判定されて終了し、起動と終了を繰り返している。アプリの初期化には約 8 分かかる。最も適切な対処はどれか。",
+      o: ["ヘルスチェックの猶予期間をアプリの初期化時間より長く設定する",
+          "スケーリングポリシーのクールダウンを 0 秒にする",
+          "ASG の終了ポリシーを OldestInstance に変更する",
+          "ASG の希望キャパシティを増やす"],
+      a: [0], r: "d2-asg",
+      e: "初期化中にヘルスチェックが失敗して終了されています。猶予期間を初期化時間より長くすれば、その間は異常判定されません。" },
+    { d: 2, q: "社内システムは平日 9 時の始業直後に必ずアクセスが急増し、スケールアウトが間に合わずに数分間遅くなる。それ以外の時間帯の負荷変動は小さい。最もシンプルな対策はどれか。",
+      o: ["平日 8 時 45 分に最小キャパシティを引き上げ、10 時に戻すスケジュールされたアクションを作成する",
+          "ステップスケーリングのステップを細かくする",
+          "インスタンスをすべてスポットインスタンスにする",
+          "ターゲット追跡の目標値を 90% に引き上げる"],
+      a: [0], r: "d2-asg",
+      e: "負荷の発生時刻が分かっているなら、スケジュールされたスケーリングで事前に台数を増やすのが確実で簡単です。過去のパターンから自動で予測させたい場合は予測スケーリングも選択肢です。" },
+    { d: 2, q: "Route 53 のフェイルオーバールーティングで、プライマリのレコードはプライベートサブネットにある内部 NLB を指している。この NLB の正常性をフェイルオーバーの判定に使いたい。どうすればよいか。",
+      o: ["NLB の IP アドレスを対象にした HTTP エンドポイントのヘルスチェックを作成する",
+          "NLB の UnHealthyHostCount に CloudWatch アラームを作成し、そのアラームを監視する Route 53 ヘルスチェックを関連付ける",
+          "計算済みヘルスチェックだけを作成する",
+          "複数値回答ルーティングに変更する"],
+      a: [1], r: "d2-r53hc",
+      e: "Route 53 のヘルスチェッカーはインターネット側から問い合わせるため、プライベートなリソースには届きません。CloudWatch アラームの状態を使うヘルスチェックで判定します。" },
+    { d: 2, q: "RDS for PostgreSQL（マルチ AZ 配置）で、日中にレポート用の重いクエリが実行されると本番の更新処理が遅くなる。レポート処理を本番の負荷から切り離したい。最も適切な方法はどれか。",
+      o: ["レポート処理の接続先をマルチ AZ のスタンバイインスタンスにする",
+          "リードレプリカを作成し、レポート処理の接続先をレプリカのエンドポイントにする",
+          "インスタンスの自動バックアップの保持期間を延ばす",
+          "ストレージの自動スケーリングを有効にする"],
+      a: [1], r: "d2-multiaz",
+      e: "マルチ AZ 配置（インスタンス）のスタンバイは読み取りを受け付けません。読み取り負荷の分離にはリードレプリカを使います。" },
+    { d: 2, q: "Aurora MySQL クラスターでライターインスタンスに障害が起きたところ、復旧まで 10 分以上かかった。クラスターにはライターインスタンスしかなかった。復旧時間を短くする方法はどれか。",
+      o: ["別の AZ に Aurora レプリカを追加する",
+          "バックトラックを有効にする",
+          "自動バックアップの保持期間を 35 日にする",
+          "ストレージを 2 倍に拡張する"],
+      a: [0], r: "d2-multiaz",
+      e: "レプリカがあれば障害時にそのレプリカが昇格するため、通常 30 秒程度で切り替わります。レプリカがないと新しいインスタンスを作り直すため時間がかかります。" },
+    { d: 2, q: "AWS Backup のバックアッププランで「30 日後にコールドストレージへ移行し、60 日後に削除」というルールを作成しようとしたところエラーになった。要件の「なるべく早く削除」を満たしつつ修正するにはどうすればよいか。",
+      o: ["削除までの期間を 120 日以上にする",
+          "コールドストレージへの移行を 90 日後にする",
+          "ボールトの Vault Lock を有効にする",
+          "バックアップの頻度を週次にする"],
+      a: [0], r: "d2-backup",
+      e: "コールドストレージには最低 90 日保持する必要があるため、削除は「移行日＋90 日」以降にしか設定できません。30 日で移行するなら削除は 120 日以降です。" },
+    { d: 2, q: "運用担当者が誤って本番 RDS for MySQL のテーブルを削除した。2 時間前の状態に戻したい。自動バックアップは保持期間 7 日で有効になっている。正しい手順はどれか。",
+      o: ["既存の DB インスタンスを 2 時間前の時点へインプレースで復元する",
+          "削除直前の時刻を指定してポイントインタイム復元を行い、新しく作成された DB インスタンスにアプリの接続先を切り替える",
+          "マルチ AZ のスタンバイへ手動でフェイルオーバーする",
+          "最新の自動スナップショットを既存のインスタンスに上書きする"],
+      a: [1], r: "d2-restore",
+      e: "RDS の PITR は常に新しい DB インスタンスとして復元されるので、接続先の切り替えが必要です。スタンバイは同期レプリケーションで削除も反映済みです。" },
+    { d: 2, q: "規制により、監査ログを 7 年間、誰も（ルートユーザーを含め）削除・変更できない形で S3 に保管する必要がある。最も適切な設定はどれか。",
+      o: ["バージョニングと MFA Delete を有効にする",
+          "バージョニングを有効にし、S3 Object Lock のコンプライアンスモードで保持期間を 7 年に設定する",
+          "Object Lock のガバナンスモードで保持期間を 7 年に設定する",
+          "ライフサイクルルールで 7 年後に削除する"],
+      a: [1], r: "d2-versioning",
+      e: "コンプライアンスモードは保持期間中、ルートユーザーを含め誰も削除や期間短縮ができません。ガバナンスモードは特別な権限で解除できるため要件を満たしません。" },
+    { d: 2, q: "社内の勤怠システムの DR 要件は RTO 6 時間、RPO 24 時間で、DR 用の費用は最小限に抑えたい。最も適切な DR 戦略はどれか。",
+      o: ["バックアップと復元",
+          "パイロットライト",
+          "ウォームスタンバイ",
+          "マルチサイト アクティブ/アクティブ"],
+      a: [0], r: "d2-dr",
+      e: "時間単位の RTO・RPO が許容されるなら、最も安価なバックアップと復元で足ります。日次バックアップを別リージョンにコピーし、障害時に IaC で環境を作って復元します。" },
+    { d: 2, q: "プロビジョンドキャパシティの DynamoDB テーブルで書き込みがスロットリングされている。ベーステーブルの WCU 使用率は 40% 程度だが、グローバルセカンダリインデックス（GSI）の書き込み使用率は 100% に達している。どう対処すべきか。",
+      o: ["GSI の書き込みキャパシティを増やす（または GSI に Auto Scaling を設定する）",
+          "ベーステーブルの読み取りキャパシティを増やす",
+          "DAX クラスターを追加する",
+          "テーブルをグローバルテーブルに変換する"],
+      a: [0], r: "d2-dbscale",
+      e: "GSI の書き込みキャパシティが不足すると、ベーステーブルへの書き込みもスロットリングされます。GSI 側のキャパシティを増やすのが正解です。DAX は読み取りのキャッシュです。" },
+
+    // ===== Domain 3 =====
+    { d: 3, q: "新しい CloudFormation スタックの作成が IAM 権限の不足で失敗し、スタックの状態が ROLLBACK_COMPLETE になった。権限を修正した後、どうすればよいか。",
+      o: ["スタックを更新して同じテンプレートを再適用する",
+          "スタックを削除してから、同じ名前で作成し直す",
+          "continue-update-rollback を実行する",
+          "ドリフト検出を実行する"],
+      a: [1], r: "d3-cfn-trouble",
+      e: "ROLLBACK_COMPLETE は作成に失敗した状態で、更新はできません。削除して作り直します。continue-update-rollback は UPDATE_ROLLBACK_FAILED のときに使います。" },
+    { d: 3, q: "スタックの更新が失敗し、ロールバック中に、コンソールから手動で削除されていたリソースを元に戻せず UPDATE_ROLLBACK_FAILED になった。スタックを使える状態に戻す方法はどれか。",
+      o: ["スタックを削除して作り直す",
+          "continue-update-rollback を実行し、戻せないリソースを --resources-to-skip で指定する",
+          "スタックポリシーを削除する",
+          "削除保護を有効にする"],
+      a: [1], r: "d3-cfn-trouble",
+      e: "ロールバックを継続させ、手動で消されたリソースはスキップすることで UPDATE_ROLLBACK_COMPLETE に戻せます。本番のスタックを安易に削除する必要はありません。" },
+    { d: 3, q: "本番の RDS を含むスタックのテンプレートを変更した。実行前に、DB インスタンスが置き換え（Replacement）になるかどうかを確認したい。どうすればよいか。",
+      o: ["変更セットを作成して内容を確認する",
+          "ドリフト検出を実行する",
+          "スタックポリシーを設定する",
+          "テンプレートを validate-template で検証する"],
+      a: [0], r: "d3-cfn-ops",
+      e: "変更セットは、更新で各リソースが追加・変更・置換・削除のどれになるかを実行前に示します。validate-template は構文チェックだけです。" },
+    { d: 3, q: "組織内の Workloads OU に属する全アカウントの全リージョンに同じ Config ルールを展開したい。今後 OU に追加されるアカウントにも自動で展開されるようにしたい。最も適切な方法はどれか。",
+      o: ["各アカウントで同じスタックを手動で作成する",
+          "サービスマネージド権限の StackSets で OU を対象にし、自動デプロイを有効にする",
+          "RAM で Config ルールを共有する",
+          "セルフマネージド権限の StackSets でアカウント ID を列挙する"],
+      a: [1], r: "d3-multi",
+      e: "サービスマネージド権限の StackSets は Organizations と統合され、OU に加わった新しいアカウントへ自動展開できます。セルフマネージドでは新規アカウントへの自動展開はできません。" },
+    { d: 3, q: "ネットワーク管理用アカウントで作成した VPC のサブネットに、各事業部門のアカウントから EC2 や RDS を起動させたい。ネットワーク構成はネットワーク管理チームが一元管理する。どの機能を使うか。",
+      o: ["VPC ピアリング",
+          "AWS RAM による VPC 共有（サブネットの共有）",
+          "Transit Gateway",
+          "CloudFormation のクロススタック参照"],
+      a: [1], r: "d3-multi",
+      e: "RAM でサブネットを共有すると、参加アカウントは所有者の VPC のサブネットに自分のリソースを起動できます。VPC 自体の管理は所有者アカウントに残ります。" },
+    { d: 3, m: true, q: "NAT ゲートウェイのないプライベートサブネットの EC2 インスタンスが、Systems Manager のマネージドノードとして表示されない。SSM Agent はインストール済みで起動している。必要な対応を 2 つ選べ。",
+      o: ["ssm、ssmmessages、ec2messages のインターフェイス型 VPC エンドポイントを作成し、プライベート DNS を有効にする",
+          "AmazonSSMManagedInstanceCore を含むインスタンスプロファイルを関連付ける",
+          "セキュリティグループのインバウンドで TCP 22 を開ける",
+          "S3 のゲートウェイ型エンドポイントだけを作成する",
+          "インスタンスに Elastic IP を割り当てる"],
+      a: [0, 1], r: "d3-ssm",
+      e: "マネージドノードになるには、エージェント・IAM 権限・SSM のエンドポイントへの経路の 3 つが必要です。インターネットに出られない場合は 3 つのインターフェイス型エンドポイントを作ります。Session Manager は SSH ポートを使いません。" },
+    { d: 3, q: "毎月、最新のパッチを適用した Amazon Linux のゴールデン AMI を作成し、東京と大阪のリージョンに配布して、各リージョンの起動テンプレートを新しい AMI に更新したい。手作業をなくす最も適切な方法はどれか。",
+      o: ["EC2 Image Builder のパイプラインを月次スケジュールで作成し、配布設定で両リージョンと起動テンプレートの更新を指定する",
+          "Data Lifecycle Manager で毎月 AMI を作成する",
+          "Run Command で毎月 yum update を実行する",
+          "AWS Backup で EC2 インスタンスを毎月バックアップする"],
+      a: [0], r: "d3-ami",
+      e: "Image Builder はレシピに従った AMI のビルド・テスト・リージョン間配布・起動テンプレートの更新までをパイプラインとして自動化できます。DLM は既存インスタンスからの AMI 作成と保持の管理です。" },
+    { d: 3, q: "CloudFormation で作成した EC2 インスタンスでユーザーデータによるアプリのセットアップが失敗していたのに、スタックは CREATE_COMPLETE になっていた。セットアップの完了をスタックの成否に反映させたい。どうすればよいか。",
+      o: ["インスタンスに CreationPolicy を設定し、ユーザーデータの最後で cfn-signal によって結果を通知する",
+          "DependsOn をインスタンスに追加する",
+          "スタックポリシーを設定する",
+          "DeletionPolicy を Retain にする"],
+      a: [0], r: "d3-cfn",
+      e: "CreationPolicy はシグナルを受け取るまでリソースを完了扱いにせず、失敗シグナルやタイムアウトでスタックを失敗させます。DependsOn は作成順序の指定です。" },
+    { d: 3, q: "開発チームが検証後にスタックを削除しても、スタックに含まれる RDS のデータは残しておきたい。最も適切な設定はどれか。",
+      o: ["RDS リソースに DeletionPolicy: Snapshot（または Retain）を設定する",
+          "スタックに削除保護を設定する",
+          "スタックポリシーで RDS の Update を拒否する",
+          "RDS の自動バックアップ保持期間を 35 日にする"],
+      a: [0], r: "d3-cfn-ops",
+      e: "DeletionPolicy はスタック削除時のリソースの扱いを決めます。Snapshot なら最終スナップショットを取ってから削除し、Retain ならリソース自体を残します。削除保護はスタックの削除自体を止めてしまいます。自動バックアップはインスタンス削除時に消えます。" },
+    { d: 3, q: "ECS サービスに不具合のあるイメージをデプロイしたところ、新しいタスクが起動に失敗し続けた。今後は失敗を自動で検知して直前の正常なデプロイへ戻したい。どうすればよいか。",
+      o: ["サービスでデプロイサーキットブレーカーとロールバックを有効にする",
+          "タスク定義のメモリを増やす",
+          "ECR のタグのイミュータビリティを有効にする",
+          "サービスの希望タスク数を 0 にする"],
+      a: [0], r: "d3-containers",
+      e: "デプロイサーキットブレーカーは新しいタスクの起動失敗が続くとデプロイを失敗と判定し、ロールバックを有効にしていれば直前の正常なデプロイに戻します。" },
+    { d: 3, q: "新しいアカウントの ap-northeast-1 で cdk deploy を実行したところ、資材用のバケットやデプロイ用ロールが見つからないというエラーで失敗した。最初に行うべきことはどれか。",
+      o: ["対象アカウントとリージョンで cdk bootstrap を実行する",
+          "cdk synth の出力を S3 に手動でアップロードする",
+          "CloudFormation のサービスロールを削除する",
+          "cdk.json を削除する"],
+      a: [0], r: "d3-cdk",
+      e: "CDK のデプロイには、アカウント×リージョンごとにブートストラップ（CDKToolkit スタック：資材用 S3・ECR・IAM ロール）が必要です。" },
+
+    // ===== Domain 4 =====
+    { d: 4, q: "アカウント B のアプリが、アカウント A の S3 バケットのオブジェクトを GetObject すると AccessDenied になる。バケットポリシーとアカウント B の IAM ポリシーは正しく許可している。オブジェクトはアカウント A のカスタマーマネージドキーによる SSE-KMS で暗号化されている。何が不足しているか。",
+      o: ["S3 ブロックパブリックアクセスの無効化",
+          "KMS キーのキーポリシーでアカウント B に kms:Decrypt を許可し、アカウント B の IAM ポリシーでもそのキーの kms:Decrypt を許可する",
+          "バケットのバージョニングの有効化",
+          "アカウント B に Object Lock のバイパス権限を付与する"],
+      a: [1], r: "d4-kms",
+      e: "SSE-KMS のオブジェクトを読むには KMS キーの Decrypt 権限も必要です。クロスアカウントでは、キーポリシーと呼び出し側の IAM ポリシーの両方で許可します。" },
+    { d: 4, q: "データ所在地の規制により、組織内の全メンバーアカウントで東京と大阪以外のリージョンでのリソース作成を禁止したい。IAM の管理を各アカウントに任せたまま確実に強制する方法はどれか。",
+      o: ["各アカウントの IAM ポリシーに Deny を追加する",
+          "aws:RequestedRegion 条件で東京と大阪以外を拒否する SCP を作成し、ルートまたは対象 OU にアタッチする（グローバルサービスは除外）",
+          "Config ルールで他リージョンのリソースを検出する",
+          "IAM Identity Center の許可セットでリージョンを制限する"],
+      a: [1], r: "d4-org",
+      e: "SCP はメンバーアカウント内の全プリンシパル（ルートユーザーを含む）の上限を決めるため、各アカウントの IAM 設定に関係なく強制できます。Config は検出であって予防ではありません。" },
+    { d: 4, q: "組織外のアカウントやインターネットに公開されている S3 バケット、KMS キー、IAM ロールを洗い出したい。最も適切なツールはどれか。",
+      o: ["信頼ゾーンを組織とした IAM Access Analyzer（外部アクセスアナライザー）",
+          "IAM Policy Simulator",
+          "Amazon Inspector",
+          "AWS Trusted Advisor のコストチェック"],
+      a: [0], r: "d4-iamtrouble",
+      e: "Access Analyzer の外部アクセス分析は、リソースベースのポリシーを解析して信頼ゾーン外からアクセス可能なリソースを検出します。" },
+    { d: 4, q: "デフォルトの暗号化が設定されていない S3 バケットを継続的に検出し、自動で修復したい。最も運用負荷の少ない方法はどれか。",
+      o: ["AWS Config のマネージドルールに、S3 バケットの暗号化を有効にする SSM Automation ランブックを自動修復として関連付ける",
+          "毎日 Lambda で全バケットを確認するスクリプトを実行する",
+          "CloudTrail を有効にしてログを確認する",
+          "GuardDuty の S3 保護を有効にする"],
+      a: [0], r: "d4-config",
+      e: "Config ルールによる継続評価と、ランブックによる自動修復の組み合わせが定番です。GuardDuty は脅威検出で、設定の修復は行いません。" },
+    { d: 4, q: "RDS for MySQL のアプリ用パスワードを 30 日ごとに自動で変更し、アプリは常に最新のパスワードを取得できるようにしたい。最も適切な方法はどれか。",
+      o: ["Parameter Store の SecureString に保存し、パラメータポリシーで有効期限を設定する",
+          "Secrets Manager に保存し、30 日間隔の自動ローテーションを有効にする",
+          "パスワードを Lambda の環境変数に保存する",
+          "IAM のパスワードポリシーで有効期限を 30 日にする"],
+      a: [1], r: "d4-secrets",
+      e: "Secrets Manager は RDS のパスワードのローテーションをネイティブに提供します。Parameter Store には自動ローテーションがなく、有効期限ポリシーは通知のための機能です。IAM のパスワードポリシーは DB のパスワードとは無関係です。" },
+    { d: 4, q: "ALB で、外部の認証局から購入して ACM にインポートした証明書を使っている。昨年は更新を忘れて期限切れによる障害が起きた。今後このような障害を防ぐ、最も運用負荷の少ない方法はどれか。",
+      o: ["ACM でパブリック証明書を発行し、DNS 検証を使用して ALB の証明書を置き換える",
+          "期限の 1 か月前にカレンダーで通知を設定する",
+          "インポート証明書の有効期間を延ばす",
+          "ALB のリスナーを HTTP に変更する"],
+      a: [0], r: "d4-tls",
+      e: "インポートした証明書は自動更新されません。ACM が発行し DNS 検証した証明書なら、ALB に関連付けている限り自動で更新されます。どうしてもインポート証明書を使う場合は、期限切れ前の EventBridge イベントや DaysToExpiry メトリクスで監視します。" },
+    { d: 4, q: "EC2 インスタンスが暗号資産のマイニングに悪用されている兆候を検知したい。追加のエージェントやログ設定をできるだけ行わずに済む方法はどれか。",
+      o: ["Amazon GuardDuty を有効にする",
+          "Amazon Macie を有効にする",
+          "Amazon Inspector を有効にする",
+          "AWS Config のマネージドルールを追加する"],
+      a: [0], r: "d4-findings",
+      e: "GuardDuty は CloudTrail・VPC フローログ・DNS ログを独自に分析し、マイニングに関連するドメインや通信を検出します（CryptoCurrency 系の検出結果）。Macie は機微データ、Inspector は脆弱性です。" },
+    { d: 4, q: "EC2 の起動時に「You are not authorized to perform this operation. Encoded authorization failure message: ...」というエラーが表示された。拒否の詳細を確認する方法はどれか。",
+      o: ["aws sts decode-authorization-message でメッセージを復号する",
+          "aws kms decrypt でメッセージを復号する",
+          "CloudWatch Logs Insights でメッセージを検索する",
+          "AWS Support に問い合わせる以外に方法はない"],
+      a: [0], r: "d4-iamtrouble",
+      e: "暗号化された認可エラーメッセージは STS の DecodeAuthorizationMessage で復号でき、どのポリシーのどの条件で拒否されたかが分かります（実行には sts:DecodeAuthorizationMessage 権限が必要）。" },
+
+    // ===== Domain 5 =====
+    { d: 5, q: "プライベートサブネットのバッチサーバーが、同じリージョンの S3 バケットと大量のデータをやり取りしており、NAT ゲートウェイのデータ処理料金が高額になっている。最もコスト効率の良い対策はどれか。",
+      o: ["S3 のゲートウェイ型 VPC エンドポイントを作成し、プライベートサブネットのルートテーブルに関連付ける",
+          "NAT ゲートウェイを NAT インスタンスに置き換える",
+          "バッチサーバーをパブリックサブネットに移す",
+          "S3 Transfer Acceleration を有効にする"],
+      a: [0], r: "d5-cost",
+      e: "ゲートウェイ型エンドポイントは無料で、S3 宛ての通信が NAT を経由しなくなります。パブリックサブネットへの移動はセキュリティ上好ましくなく、Transfer Acceleration は追加料金がかかります。" },
+    { d: 5, q: "VPC フローログで、インターネット上のクライアントから Web サーバー（TCP 443）への通信が ACCEPT と記録され、サーバーからクライアントへの応答が REJECT と記録されていた。最も可能性の高い原因はどれか。",
+      o: ["セキュリティグループのアウトバウンドルールで 443 が許可されていない",
+          "ネットワーク ACL のアウトバウンドルールでエフェメラルポート（1024-65535）が許可されていない",
+          "セキュリティグループのインバウンドルールで 443 が許可されていない",
+          "インターネットゲートウェイがアタッチされていない"],
+      a: [1], r: "d5-logs",
+      e: "SG はステートフルなので、許可された通信の応答は自動で許可されます。応答だけが拒否されるのはステートレスな NACL のアウトバウンドで、応答の宛先であるエフェメラルポートが許可されていないためです。" },
+    { d: 5, m: true, q: "オンプレミスのサーバーから、Site-to-Site VPN 経由で、VPC に関連付けた Route 53 プライベートホストゾーン（app.internal）の名前を解決したい。必要な設定を 2 つ選べ。",
+      o: ["Route 53 Resolver のインバウンドエンドポイントを作成し、オンプレ DNS からの TCP/UDP 53 を許可する",
+          "オンプレミスの DNS サーバーで、app.internal をインバウンドエンドポイントの IP アドレスへ転送する条件付きフォワーダーを設定する",
+          "Route 53 Resolver のアウトバウンドエンドポイントと転送ルールを作成する",
+          "プライベートホストゾーンをパブリックホストゾーンに変更する",
+          "VPC の enableDnsSupport を false にする"],
+      a: [0, 1], r: "d5-resolver",
+      e: "オンプレ → VPC の名前解決はインバウンドエンドポイントで受け、オンプレ側でそこへ転送します。アウトバウンドエンドポイントは VPC → オンプレの逆向きです。" },
+    { d: 5, q: "CloudFront のオリジンである ALB のセキュリティグループを、インターネット全体から特定の IP 範囲だけに変更したところ、CloudFront 経由のアクセスで 504 エラーが多発するようになった。最も適切な対処はどれか。",
+      o: ["ALB のセキュリティグループで、CloudFront のオリジン向けマネージドプレフィックスリストからの HTTPS を許可する",
+          "CloudFront のキャッシュを無効化する",
+          "ALB のアイドルタイムアウトを延ばす",
+          "CloudFront の価格クラスを変更する"],
+      a: [0], r: "d5-cf",
+      e: "504 はオリジンが応答しない（接続できない）ことを示します。CloudFront からオリジンへの接続元はマネージドプレフィックスリスト com.amazonaws.global.cloudfront.origin-facing で許可します。" },
+    { d: 5, q: "ドメインの頂点（example.com）へのアクセスを ALB に向けたい。ALB の IP アドレスは変わる可能性がある。どのレコードを作成するか。",
+      o: ["ALB の DNS 名を値とする CNAME レコード",
+          "ALB をターゲットとするエイリアスレコード（A／AAAA）",
+          "ALB の現在の IP アドレスを値とする A レコード",
+          "ALB の DNS 名を値とする NS レコード"],
+      a: [1], r: "d5-r53",
+      e: "CNAME はゾーン頂点に作成できません。エイリアスレコードは頂点に作成でき、ALB の IP の変化にも自動で追従します。" },
+    { d: 5, q: "オンラインゲームの UDP サーバーを東京とシンガポールの NLB の背後で運用している。プレイヤー側のファイアウォールに登録するため固定の IP アドレスが必要で、リージョン障害時は DNS の TTL を待たずに切り替えたい。最も適切なサービスはどれか。",
+      o: ["AWS Global Accelerator",
+          "Amazon CloudFront",
+          "Route 53 のレイテンシールーティング",
+          "Elastic IP をそれぞれの NLB に付ける"],
+      a: [0], r: "d5-ga",
+      e: "Global Accelerator は 2 つの静的エニーキャスト IP を提供し、UDP にも対応、ヘルスチェックに基づいて DNS に依存せず高速にリージョンを切り替えます。CloudFront は HTTP 用です。" },
+    { d: 5, q: "VPC-A と VPC-B、VPC-B と VPC-C の間にそれぞれ VPC ピアリング接続がある。VPC-A のインスタンスから VPC-C のインスタンスへ通信できない。どうすればよいか。",
+      o: ["VPC-A のルートテーブルに、VPC-C の CIDR を VPC-A と VPC-B のピアリング接続に向けるルートを追加する",
+          "VPC-A と VPC-C の間にピアリング接続を作成する（または Transit Gateway を導入する）",
+          "VPC-B に NAT ゲートウェイを作成する",
+          "VPC-B のセキュリティグループで VPC-A を許可する"],
+      a: [1], r: "d5-private",
+      e: "VPC ピアリングは推移的なルーティングをサポートしないため、VPC-B を経由して VPC-C へは行けません。直接ピアリングするか、Transit Gateway でハブ型に接続します。" },
+    { d: 5, q: "プライベートサブネットのインスタンスから Systems Manager の API を呼ぶため ssm のインターフェイス型 VPC エンドポイントを作成したが、名前解決するとパブリック IP が返り、通信が NAT ゲートウェイを経由している。どうすればよいか。",
+      o: ["エンドポイントのプライベート DNS を有効にし、VPC の enableDnsSupport と enableDnsHostnames を true にする",
+          "ゲートウェイ型エンドポイントに作り直す",
+          "エンドポイントポリシーを削除する",
+          "NAT ゲートウェイを削除するだけでよい"],
+      a: [0], r: "d5-private",
+      e: "インターフェイス型エンドポイントでサービスの標準のホスト名をプライベート IP に解決させるには、プライベート DNS と VPC の DNS 属性が必要です。SSM はゲートウェイ型に対応していません。" },
+    { d: 5, q: "EC2 インスタンスから同じ VPC の RDS へ接続できない。実際に通信を発生させずに、セキュリティグループ・ネットワーク ACL・ルートテーブルのどこで経路が遮断されているかを特定したい。最も適切なツールはどれか。",
+      o: ["VPC Reachability Analyzer",
+          "VPC Traffic Mirroring",
+          "CloudWatch Internet Monitor",
+          "AWS Trusted Advisor"],
+      a: [0], r: "d5-trouble",
+      e: "Reachability Analyzer は送信元と送信先の間の経路を設定から静的に解析し、到達できない場合は原因となった部品を示します。Traffic Mirroring はパケットの中身の取得、Internet Monitor はインターネット側の性能監視です。" }
+  ];
+
+  /* ---------- quiz rendering ---------- */
+  var KEY_Q = "soa-c03-quiz-v1";
+  var answers = store.get(KEY_Q, {});
+  var filter = "all";
+  var wrongOnly = false;
+  var list = document.getElementById("quiz-list");
+  var scoreEl = document.getElementById("quiz-score");
+  var letters = ["A", "B", "C", "D", "E"];
+  var dname = { 1: "分野 1", 2: "分野 2", 3: "分野 3", 4: "分野 4", 5: "分野 5" };
+
+  function sameSet(a, b) {
+    if (a.length !== b.length) return false;
+    var x = a.slice().sort(), y = b.slice().sort();
+    for (var i = 0; i < x.length; i++) if (x[i] !== y[i]) return false;
+    return true;
+  }
+  function isCorrect(i) { return answers[i] && sameSet(answers[i], Q[i].a); }
+
+  function updateScore() {
+    var n = 0, ok = 0;
+    Q.forEach(function (q, i) {
+      if (filter !== "all" && String(q.d) !== filter) return;
+      if (answers[i]) { n++; if (isCorrect(i)) ok++; }
+    });
+    var total = Q.filter(function (q) { return filter === "all" || String(q.d) === filter; }).length;
+    scoreEl.textContent = "正答 " + ok + " / 回答 " + n + "（全 " + total + " 問）";
+  }
+
+  function grade(card, i) {
+    var q = Q[i];
+    var sel = answers[i] || [];
+    var btns = card.querySelectorAll(".q-opt");
+    btns.forEach(function (b, k) {
+      b.disabled = true;
+      b.classList.remove("sel");
+      if (q.a.indexOf(k) >= 0) b.classList.add("ok");
+      else if (sel.indexOf(k) >= 0) b.classList.add("ng");
+      b.setAttribute("aria-pressed", sel.indexOf(k) >= 0 ? "true" : "false");
+    });
+    var submit = card.querySelector(".q-submit");
+    if (submit) submit.hidden = true;
+    var exp = card.querySelector(".q-exp");
+    var ok = isCorrect(i);
+    exp.innerHTML = "";
+    var res = document.createElement("p");
+    res.className = "q-res " + (ok ? "ok" : "ng");
+    res.textContent = (ok ? "正解" : "不正解") + "：正答は " + q.a.map(function (k) { return letters[k]; }).join("・");
+    var body = document.createElement("p");
+    body.textContent = q.e;
+    var link = document.createElement("a");
+    link.href = "#" + q.r;
+    link.textContent = "関連する節へ";
+    exp.appendChild(res); exp.appendChild(body); exp.appendChild(link);
+    exp.hidden = false;
+  }
+
+  function render() {
+    list.innerHTML = "";
+    Q.forEach(function (q, i) {
+      if (filter !== "all" && String(q.d) !== filter) return;
+      if (wrongOnly && !(answers[i] && !isCorrect(i))) return;
+      var card = document.createElement("article");
+      card.className = "q-card";
+      card.id = "q" + (i + 1);
+      var head = document.createElement("div");
+      head.className = "q-head";
+      head.innerHTML = '<span class="dot d' + q.d + '"></span><span>Q' + (i + 1) + "</span><span>" + dname[q.d] + "</span>" + (q.m ? "<span>複数選択（" + q.a.length + " つ）</span>" : "<span>択一</span>");
+      var stem = document.createElement("p");
+      stem.className = "q-stem";
+      stem.textContent = q.q;
+      var opts = document.createElement("div");
+      opts.className = "q-opts";
+      var pending = [];
+      q.o.forEach(function (t, k) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "q-opt";
+        b.setAttribute("aria-pressed", "false");
+        b.innerHTML = '<span class="lt">' + letters[k] + "</span><span></span>";
+        b.lastChild.textContent = t;
+        b.addEventListener("click", function () {
+          if (answers[i]) return;
+          if (!q.m) {
+            answers[i] = [k];
+            store.set(KEY_Q, answers);
+            grade(card, i);
+            updateScore();
+          } else {
+            var p = pending.indexOf(k);
+            if (p >= 0) { pending.splice(p, 1); b.classList.remove("sel"); b.setAttribute("aria-pressed", "false"); }
+            else { pending.push(k); b.classList.add("sel"); b.setAttribute("aria-pressed", "true"); }
+            submit.disabled = pending.length !== q.a.length;
+          }
+        });
+        opts.appendChild(b);
+      });
+      card.appendChild(head); card.appendChild(stem); card.appendChild(opts);
+      var submit = null;
+      if (q.m) {
+        submit = document.createElement("button");
+        submit.type = "button";
+        submit.className = "btn primary q-submit";
+        submit.textContent = "回答する";
+        submit.disabled = true;
+        submit.addEventListener("click", function () {
+          answers[i] = pending.slice();
+          store.set(KEY_Q, answers);
+          grade(card, i);
+          updateScore();
+        });
+        var row = document.createElement("div");
+        row.appendChild(submit);
+        card.appendChild(row);
+      }
+      var exp = document.createElement("div");
+      exp.className = "q-exp";
+      exp.hidden = true;
+      card.appendChild(exp);
+      list.appendChild(card);
+      if (answers[i]) grade(card, i);
+    });
+    if (!list.children.length) {
+      var p = document.createElement("p");
+      p.className = "prose";
+      p.textContent = wrongOnly ? "この条件で表示する誤答はありません。" : "該当する問題はありません。";
+      list.appendChild(p);
+    }
+    updateScore();
+  }
+
+  document.querySelectorAll(".quiz-bar [data-filter]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      filter = b.getAttribute("data-filter");
+      document.querySelectorAll(".quiz-bar [data-filter]").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      render();
+    });
+  });
+  document.getElementById("quiz-wrong").addEventListener("click", function () {
+    wrongOnly = !wrongOnly;
+    this.setAttribute("aria-pressed", wrongOnly ? "true" : "false");
+    render();
+  });
+  var resetBtn = document.getElementById("quiz-reset");
+  var resetArmed = false;
+  resetBtn.addEventListener("click", function () {
+    if (!resetArmed) {
+      resetArmed = true;
+      resetBtn.textContent = "もう一度押すとリセット";
+      setTimeout(function () { resetArmed = false; resetBtn.textContent = "回答をリセット"; }, 4000);
+      return;
+    }
+    resetArmed = false;
+    resetBtn.textContent = "回答をリセット";
+    answers = {};
+    store.set(KEY_Q, answers);
+    render();
+  });
+  render();
+
+  /* ---------- skills ---------- */
+  var S = [
+    { d: 1, t: "1.1", items: [
+      ["1.1.1", "CloudWatch・CloudTrail・Managed Prometheus でワークロード（サーバーレス・コンピューティング・AI）の監視とログ記録を設定", "d1-metrics"],
+      ["1.1.2", "EC2・ECS・EKS からメトリクスとログを集める CloudWatch エージェントの設定と管理", "d1-agent"],
+      ["1.1.3", "AWS サービスや EventBridge を呼び出すアラームの設定とトラブルシューティング（複合アラームを含む）", "d1-alarms"],
+      ["1.1.4", "複数アカウント・リージョンにまたがる共有可能なダッシュボード", "d1-dash"],
+      ["1.1.5", "SNS への通知と、SNS に通知するアラームの設定", "d1-sns"] ] },
+    { d: 1, t: "1.2", items: [
+      ["1.2.1", "CloudWatch・Lambda・Systems Manager・CloudTrail・Kiro・DevOps Agent による分析と修復の自動化", "d1-auto"],
+      ["1.2.2", "EventBridge によるイベントの送信・エンリッチ・配信とルールのトラブルシューティング", "d1-eb"],
+      ["1.2.3", "カスタム／事前定義の Automation ランブックの作成と実行", "d1-auto"] ] },
+    { d: 1, t: "1.3", items: [
+      ["1.3.1", "メトリクス・タグ・ツールによるコンピューティングの最適化", "d1-compute"],
+      ["1.3.2", "EBS のメトリクス分析とボリュームタイプの最適化", "d1-ebs"],
+      ["1.3.3", "S3 のパフォーマンス戦略（DataSync・Transfer Acceleration・マルチパート・ライフサイクル）", "d1-s3"],
+      ["1.3.4", "共有ストレージ（EFS・FSx・S3 Files）の選定と最適化", "d1-shared"],
+      ["1.3.5", "RDS のメトリクス監視と設定変更（Performance Insights・RDS Proxy）", "d1-rds"],
+      ["1.3.6", "EC2 とストレージ・ネットワーク機能（プレイスメントグループ）", "d1-ec2net"] ] },
+    { d: 2, t: "2.1", items: [
+      ["2.1.1", "コンピューティングのスケーリングの設定と管理", "d2-asg"],
+      ["2.1.2", "CloudFront・ElastiCache によるキャッシュ", "d2-cache"],
+      ["2.1.3", "RDS・DynamoDB のスケーリング", "d2-dbscale"] ] },
+    { d: 2, t: "2.2", items: [
+      ["2.2.1", "ELB と Route 53 のヘルスチェックの設定とトラブルシューティング", "d2-elb"],
+      ["2.2.2", "耐障害性を備えたシステム（マルチ AZ）", "d2-multiaz"] ] },
+    { d: 2, t: "2.3", items: [
+      ["2.3.1", "AWS Backup によるスナップショットとバックアップの自動化", "d2-backup"],
+      ["2.3.2", "RTO・RPO・コストに応じた DB の復元（PITR など）", "d2-restore"],
+      ["2.3.3", "S3・FSx のバージョニング", "d2-versioning"],
+      ["2.3.4", "DR の手順とベストプラクティス（4 戦略）", "d2-dr"] ] },
+    { d: 3, t: "3.1", items: [
+      ["3.1.1", "AMI とコンテナイメージの作成と管理（Image Builder）", "d3-ami"],
+      ["3.1.2", "CloudFormation と CDK によるリソースの作成と管理", "d3-cfn"],
+      ["3.1.3", "デプロイの問題（サブネットのサイズ、CloudFormation エラー、権限）の修復", "d3-cfn-trouble"],
+      ["3.1.4", "複数リージョン・アカウントへのプロビジョニングと共有（RAM・StackSets）", "d3-multi"],
+      ["3.1.5", "デプロイ戦略とサービスの実装", "d3-deploy"],
+      ["3.1.6", "Terraform・Git によるデプロイの自動化", "d3-3rd"] ] },
+    { d: 3, t: "3.2", items: [
+      ["3.2.1", "Systems Manager による運用プロセスの自動化", "d3-ssm"],
+      ["3.2.2", "Lambda・S3 イベント通知・EventBridge・DevOps Agent によるイベント駆動の自動化", "d3-event"] ] },
+    { d: 4, t: "4.1", items: [
+      ["4.1.1", "IAM の機能（パスワードポリシー、MFA、ロール、フェデレーション、リソースポリシー、条件）", "d4-iam"],
+      ["4.1.2", "CloudTrail・Access Analyzer・Policy Simulator によるアクセス問題の調査と監査", "d4-iamtrouble"],
+      ["4.1.3", "マルチアカウント戦略（Organizations、SCP、Identity Center）", "d4-org"],
+      ["4.1.4", "Trusted Advisor のセキュリティチェックに基づく修復", "d4-ta"],
+      ["4.1.5", "コンプライアンス要件と継続的モニタリング（リージョン選択、コンフォーマンスパック）", "d4-config"] ] },
+    { d: 4, t: "4.2", items: [
+      ["4.2.1", "データ分類スキームの実装", "d4-classify"],
+      ["4.2.2", "保管中の暗号化（KMS）の実装とトラブルシューティング", "d4-kms"],
+      ["4.2.3", "転送中の暗号化（ACM）の実装とトラブルシューティング", "d4-tls"],
+      ["4.2.4", "シークレットの安全な保管", "d4-secrets"],
+      ["4.2.5", "Security Hub・GuardDuty・Config・Inspector・Security Agent の結果のレポートと修復", "d4-findings"] ] },
+    { d: 5, t: "5.1", items: [
+      ["5.1.1", "VPC の設定（サブネット、ルート、NACL、SG、NAT、IGW、Egress-Only IGW）", "d5-vpc"],
+      ["5.1.2", "プライベート接続（VPC エンドポイント、PrivateLink、ピアリング）", "d5-private"],
+      ["5.1.3", "ネットワーク保護サービス（DNS Firewall、WAF、Shield、Network Firewall）の監査", "d5-protect"],
+      ["5.1.4", "ネットワークアーキテクチャのコスト最適化", "d5-cost"] ] },
+    { d: 5, t: "5.2", items: [
+      ["5.2.1", "DNS の設定（Route 53 Resolver）", "d5-resolver"],
+      ["5.2.2", "Route 53 のルーティングポリシー・設定・クエリログ", "d5-r53"],
+      ["5.2.3", "CloudFront・Global Accelerator によるコンテンツ配信", "d5-cf"] ] },
+    { d: 5, t: "5.3", items: [
+      ["5.3.1", "VPC 設定（サブネット、ルート、NACL、SG、TGW、NAT）のトラブルシューティング", "d5-trouble"],
+      ["5.3.2", "ネットワークログ（フローログ、ELB、WAF、CloudFront、コンテナ）の収集と解釈", "d5-logs"],
+      ["5.3.3", "CloudFront のキャッシュの問題の特定と修復", "d5-cf"],
+      ["5.3.4", "ハイブリッド接続・プライベート接続の問題の特定", "d5-hybrid"],
+      ["5.3.5", "CloudWatch ネットワークモニタリングサービスの設定と分析", "d5-netmon"] ] }
+  ];
+  var KEY_S = "soa-c03-skills-v1";
+  var done = store.get(KEY_S, {});
+  var skillRoot = document.getElementById("skill-list");
+  var titles = { 1: "分野 1 モニタリング・修復・最適化", 2: "分野 2 信頼性と事業継続性", 3: "分野 3 デプロイ・自動化", 4: "分野 4 セキュリティとコンプライアンス", 5: "分野 5 ネットワークとコンテンツ配信" };
+  var meters = {};
+  [1, 2, 3, 4, 5].forEach(function (d) {
+    var box = document.createElement("div");
+    box.className = "sk-dom";
+    var h = document.createElement("h5");
+    h.innerHTML = '<span class="dot d' + d + '"></span><span>' + titles[d] + '</span><span class="meter" aria-hidden="true"><span></span></span><span class="mono sk-count"></span>';
+    box.appendChild(h);
+    meters[d] = { bar: h.querySelector(".meter > span"), count: h.querySelector(".sk-count"), total: 0 };
+    S.filter(function (g) { return g.d === d; }).forEach(function (g) {
+      g.items.forEach(function (it) {
+        meters[d].total++;
+        var row = document.createElement("label");
+        row.className = "sk-row";
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.id = "sk-" + it[0].replace(/\./g, "-");
+        cb.checked = !!done[it[0]];
+        cb.addEventListener("change", function () { done[it[0]] = cb.checked; store.set(KEY_S, done); updMeters(); });
+        var id = document.createElement("span"); id.className = "id"; id.textContent = it[0];
+        var txt = document.createElement("span");
+        txt.textContent = it[1] + " ";
+        var a = document.createElement("a"); a.href = "#" + it[2]; a.textContent = "本文"; txt.appendChild(a);
+        row.appendChild(cb); row.appendChild(id); row.appendChild(txt);
+        box.appendChild(row);
+      });
+    });
+    skillRoot.appendChild(box);
+  });
+  function updMeters() {
+    [1, 2, 3, 4, 5].forEach(function (d) {
+      var n = 0;
+      S.filter(function (g) { return g.d === d; }).forEach(function (g) { g.items.forEach(function (it) { if (done[it[0]]) n++; }); });
+      meters[d].bar.style.width = Math.round(n / meters[d].total * 100) + "%";
+      meters[d].count.textContent = n + "/" + meters[d].total;
+    });
+  }
+  updMeters();
+
+  /* ---------- TOC highlight ---------- */
+  var links = Array.prototype.slice.call(document.querySelectorAll(".toc a[href^='#']"));
+  var map = {};
+  links.forEach(function (a) { map[a.getAttribute("href").slice(1)] = a; });
+  var targets = Object.keys(map).map(function (id) { return document.getElementById(id); }).filter(Boolean);
+  if ("IntersectionObserver" in window && targets.length) {
+    var current = null;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting) {
+          var a = map[en.target.id];
+          if (a && a.parentElement.parentElement.parentElement.tagName === "LI") {
+            if (current) current.classList.remove("active");
+            current = a; a.classList.add("active");
+          }
+        }
+      });
+    }, { rootMargin: "0px 0px -70% 0px", threshold: 0 });
+    targets.forEach(function (t) { io.observe(t); });
+  }
+})();
+</script>

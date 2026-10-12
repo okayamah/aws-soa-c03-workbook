@@ -1,0 +1,273 @@
+
+<!-- ================= Chapter 5 ================= -->
+<section class="chapter" id="d5">
+  <div class="chapter-head">
+    <span class="num"><span class="dot d5"></span>CONTENT DOMAIN 5 · TASK 5.1 / 5.2 / 5.3</span>
+    <h2>ネットワークとコンテンツ配信</h2>
+    <div class="meta"><span class="weight">採点対象の 18%</span><span class="weight">約 9 問</span></div>
+  </div>
+  <div class="prose">
+    <p>ネットワーク分野は「つなぐ（5.1）」「名前を引いて届ける（5.2）」「つながらない原因を突き止める（5.3）」の 3 タスクです。設計は対象外なので、既存の VPC で<strong>どの部品の設定が通信を止めているか</strong>を判断する問題が中心になります。パケットがどの部品をどの順に通るかを頭に描けるようにしてください。</p>
+  </div>
+
+  <!-- ===== VPC ===== -->
+  <section class="sec" id="d5-vpc">
+    <h3>VPC の構成要素 <span class="sk">5.1.1</span></h3>
+    <figure class="fig">
+      <div class="canvas">
+      <svg viewBox="0 0 900 420" role="img" aria-label="2つのAZにパブリックサブネットとプライベートサブネットがあり、パブリックのルートテーブルはインターネットゲートウェイへ、プライベートはNATゲートウェイへ向く。S3へはゲートウェイ型エンドポイントで到達する">
+        <defs><marker id="a-vpc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker>
+        <marker id="a-vpc-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-ha" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <text class="s-tb" x="450" y="22" text-anchor="middle">インターネット</text>
+        <rect class="s-acc" x="380" y="40" width="140" height="34" rx="5"/><text class="s-tb" x="450" y="62" text-anchor="middle">IGW</text>
+        <rect class="s-zone" x="20" y="90" width="860" height="320" rx="10"/><text class="s-tm" x="34" y="110">VPC 10.0.0.0/16</text>
+        <rect class="s-zone-fill" x="40" y="120" width="400" height="270" rx="8"/><text class="s-tb" x="54" y="140">AZ a</text>
+        <rect class="s-zone-fill" x="460" y="120" width="400" height="270" rx="8"/><text class="s-tb" x="474" y="140">AZ c</text>
+        <rect class="s-box" x="56" y="152" width="368" height="96" rx="6"/><text class="s-ts" x="68" y="170">パブリックサブネット 10.0.0.0/24</text>
+        <rect class="s-box" x="476" y="152" width="368" height="96" rx="6"/><text class="s-ts" x="488" y="170">パブリックサブネット 10.0.1.0/24</text>
+        <rect class="s-box2" x="76" y="184" width="130" height="44" rx="5"/><text class="s-t" x="141" y="211" text-anchor="middle">NAT GW＋EIP</text>
+        <rect class="s-box2" x="496" y="184" width="130" height="44" rx="5"/><text class="s-t" x="561" y="211" text-anchor="middle">NAT GW＋EIP</text>
+        <rect class="s-box2" x="236" y="184" width="170" height="44" rx="5"/><text class="s-t" x="321" y="211" text-anchor="middle">ALB ノード</text>
+        <rect class="s-box2" x="656" y="184" width="170" height="44" rx="5"/><text class="s-t" x="741" y="211" text-anchor="middle">ALB ノード</text>
+        <rect class="s-box" x="56" y="262" width="368" height="110" rx="6"/><text class="s-ts" x="68" y="280">プライベートサブネット 10.0.10.0/24</text>
+        <rect class="s-box" x="476" y="262" width="368" height="110" rx="6"/><text class="s-ts" x="488" y="280">プライベートサブネット 10.0.11.0/24</text>
+        <rect class="s-box2" x="236" y="300" width="170" height="44" rx="5"/><text class="s-t" x="321" y="327" text-anchor="middle">アプリ（EC2/ECS）</text>
+        <rect class="s-box2" x="656" y="300" width="170" height="44" rx="5"/><text class="s-t" x="741" y="327" text-anchor="middle">アプリ（EC2/ECS）</text>
+        <line class="s-la" x1="450" y1="74" x2="330" y2="180" marker-end="url(#a-vpc-a)"/>
+        <line class="s-la" x1="450" y1="74" x2="730" y2="180" marker-end="url(#a-vpc-a)"/>
+        <line class="s-l" x1="290" y1="300" x2="160" y2="232" marker-end="url(#a-vpc)"/>
+        <line class="s-l" x1="710" y1="300" x2="580" y2="232" marker-end="url(#a-vpc)"/>
+        <text class="s-ts" x="414" y="296" text-anchor="end">0.0.0.0/0 → nat-a</text>
+        <text class="s-ts" x="834" y="296" text-anchor="end">0.0.0.0/0 → nat-c</text>
+        <rect class="s-good" x="76" y="300" width="130" height="44" rx="5"/><text class="s-t" x="141" y="320" text-anchor="middle">S3 ゲートウェイ</text><text class="s-t" x="141" y="336" text-anchor="middle">エンドポイント</text>
+        <line class="s-l s-dash" x1="236" y1="332" x2="210" y2="332" marker-end="url(#a-vpc)"/>
+        <text class="s-ts" x="141" y="362" text-anchor="middle">pl-xxxx → vpce</text>
+      </svg>
+      </div>
+      <figcaption><b>2 AZ 構成の基本形。</b>パブリックサブネットとは「ルートテーブルにインターネットゲートウェイ（IGW）へのルートがあるサブネット」のことです。プライベートサブネットの外向き通信は同じ AZ の NAT ゲートウェイへ、S3 や DynamoDB へはゲートウェイ型エンドポイント（プレフィックスリストのルート）を使えば NAT を経由しません。</figcaption>
+    </figure>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>部品</th><th>要点</th></tr></thead>
+      <tbody>
+        <tr><td>CIDR</td><td>VPC は /16〜/28。後からセカンダリ CIDR を追加可能。サブネットは AZ に属し、<strong>先頭 4 つと最後の 1 つ、計 5 アドレスが予約</strong>（ネットワーク、VPC ルーター、DNS、将来用、ブロードキャスト）。VPC ピアリングや TGW で接続する VPC は CIDR が重複してはならない</td></tr>
+        <tr><td>ルートテーブル</td><td>サブネットに 1 つ関連付け（未指定ならメインルートテーブル）。<strong>最長一致</strong>で宛先を選ぶ。VPC 内の <code>local</code> ルートは削除できない</td></tr>
+        <tr><td>インターネットゲートウェイ</td><td>VPC に 1 つ。インスタンス側にパブリック IPv4（または Elastic IP）が必要。IPv6 の双方向通信も担う</td></tr>
+        <tr><td>NAT ゲートウェイ</td><td>プライベートサブネットからの IPv4 外向き通信。パブリック NAT はパブリックサブネットに置き EIP を付ける（リージョナル NAT ゲートウェイはパブリックサブネット不要）。時間料金＋<strong>処理データ量の料金</strong>。宛先ごとの同時接続数に上限があり、枯渇は <code>ErrorPortAllocation</code> メトリクスで分かる。プライベート NAT は重複 CIDR 間の接続用</td></tr>
+        <tr><td>NAT インスタンス</td><td>旧方式。使う場合は EC2 の<strong>送信元／送信先チェックを無効化</strong>する必要がある</td></tr>
+        <tr><td>Egress-Only インターネットゲートウェイ</td><td><strong>IPv6 専用</strong>の外向き通信（外からの開始は拒否、ステートフル）。IPv6 には NAT がないため、プライベートにしたい IPv6 サブネットはこれを使う</td></tr>
+        <tr><td>Elastic IP</td><td>固定のパブリック IPv4。2024 年 2 月以降、パブリック IPv4 アドレスは使用中でも時間料金がかかる。未使用の EIP は解放</td></tr>
+        <tr><td>DNS 属性</td><td><code>enableDnsSupport</code>（Amazon 提供 DNS の利用）と <code>enableDnsHostnames</code>（DNS ホスト名の付与）。<strong>プライベートホストゾーンとインターフェイス型エンドポイントのプライベート DNS には両方 true</strong> が必要</td></tr>
+        <tr><td>VPC ブロックパブリックアクセス</td><td>アカウント・リージョン単位で VPC の IGW 経由の通信を一括遮断（例外設定可）</td></tr>
+        <tr><td>IPAM</td><td>組織全体の IP アドレス空間をプールで計画・割り当て・監視。VPC 作成時に重複しない CIDR を自動割り当て、重複や未使用を検出</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <!-- ===== SG/NACL ===== -->
+  <section class="sec" id="d5-sgnacl">
+    <h3>セキュリティグループとネットワーク ACL <span class="sk">5.1.1</span> <span class="sk">5.3.1</span></h3>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>項目</th><th>セキュリティグループ（SG）</th><th>ネットワーク ACL（NACL）</th></tr></thead>
+      <tbody>
+        <tr><td>適用単位</td><td>ENI（インスタンス、ALB、RDS、エンドポイントなど）</td><td>サブネット</td></tr>
+        <tr><td>状態</td><td><strong>ステートフル</strong>：許可した通信の戻りは自動で許可</td><td><strong>ステートレス</strong>：行きと戻りの両方にルールが必要</td></tr>
+        <tr><td>ルール</td><td>許可のみ（拒否ルールは書けない）</td><td>許可と拒否。<strong>番号の小さい順に評価</strong>し、最初に一致したもので決定。最後は <code>*</code> の拒否</td></tr>
+        <tr><td>参照</td><td>送信元に他の SG を指定できる（例：ALB の SG からのみ許可）</td><td>CIDR のみ</td></tr>
+        <tr><td>既定</td><td>新規 SG：インバウンドなし、アウトバウンド全許可</td><td>既定 NACL：全許可。<strong>カスタム NACL：作成時は全拒否</strong></td></tr>
+        <tr><td>得意なこと</td><td>アプリ単位の細かな許可</td><td>特定 IP の明示的なブロック、サブネット単位の大まかな防御</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <figure class="fig mt">
+      <div class="canvas">
+      <svg viewBox="0 0 900 250" role="img" aria-label="クライアントからのSSHはNACLのインバウンドで22番、SGのインバウンドで22番を通る。戻りはSGは自動許可、NACLはアウトバウンドでエフェメラルポート1024から65535の許可が必要">
+        <defs><marker id="a-sg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker>
+        <marker id="a-sg-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-ha" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <rect class="s-box" x="20" y="90" width="150" height="70" rx="6"/><text class="s-tb" x="95" y="118" text-anchor="middle">クライアント PC</text><text class="s-mono" x="95" y="140" text-anchor="middle">送信元ポート 50123</text>
+        <rect class="s-zone-fill" x="270" y="20" width="610" height="210" rx="8"/><text class="s-tm" x="284" y="40">サブネット（NACL の境界）</text>
+        <rect class="s-box2" x="290" y="60" width="160" height="150" rx="6"/><text class="s-tb" x="370" y="84" text-anchor="middle">NACL</text><text class="s-ts" x="370" y="104" text-anchor="middle">ステートレス</text>
+        <rect class="s-box2" x="520" y="60" width="160" height="150" rx="6"/><text class="s-tb" x="600" y="84" text-anchor="middle">SG</text><text class="s-ts" x="600" y="104" text-anchor="middle">ステートフル</text>
+        <rect class="s-box" x="740" y="90" width="120" height="70" rx="6"/><text class="s-tb" x="800" y="122" text-anchor="middle">EC2</text><text class="s-mono" x="800" y="142" text-anchor="middle">:22</text>
+        <line class="s-la" x1="170" y1="115" x2="736" y2="115" marker-end="url(#a-sg-a)"/>
+        <text class="s-mono" x="370" y="132" text-anchor="middle">IN: TCP 22 許可</text>
+        <text class="s-mono" x="600" y="132" text-anchor="middle">IN: TCP 22 許可</text>
+        <line class="s-l s-dash" x1="740" y1="150" x2="174" y2="150" marker-end="url(#a-sg)"/>
+        <text class="s-mono" x="370" y="172" text-anchor="middle">OUT: TCP 1024-65535</text><text class="s-ts" x="370" y="190" text-anchor="middle">を明示的に許可</text>
+        <text class="s-ts" x="600" y="172" text-anchor="middle">戻りは自動で許可</text>
+        <text class="s-ts" x="210" y="106" text-anchor="middle">行き</text><text class="s-ts" x="210" y="168" text-anchor="middle">戻り</text>
+      </svg>
+      </div>
+      <figcaption><b>SSH 接続のパケットの通り道。</b>戻りの通信の宛先はクライアントの<strong>エフェメラルポート</strong>（Linux は 32768〜60999、Windows は 49152〜65535 など）です。どんなクライアントにも対応するには NACL のアウトバウンドで 1024〜65535 を許可します（演習 PDF 問題 21）。</figcaption>
+    </figure>
+    <div class="callout trap mt">
+      <span class="lbl">ひっかけ注意</span>
+      <ul>
+        <li>「SG のアウトバウンドでエフェメラルポートを許可」は不要です（ステートフルなので戻りは自動）。NACL のアウトバウンドに SSH の 22 番を足す選択肢も誤り（戻りの宛先は 22 ではない）。</li>
+        <li>NAT ゲートウェイや ALB を経由する場合も、それぞれのサブネットの NACL で戻りのエフェメラルポートが必要です。</li>
+        <li>特定の攻撃元 IP を遮断したい → SG では拒否を書けないので <strong>NACL の拒否ルール</strong>（許可ルールより小さい番号で）。Web アプリなら WAF の IP セットでも可。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== Private connectivity ===== -->
+  <section class="sec" id="d5-private">
+    <h3>プライベートネットワーク接続 <span class="sk">5.1.2</span></h3>
+    <figure class="fig">
+      <div class="canvas">
+      <svg viewBox="0 0 900 250" role="img" aria-label="ゲートウェイ型エンドポイントはルートテーブルにプレフィックスリストのルートを追加し、S3とDynamoDBのみ対応で無料。インターフェイス型エンドポイントはサブネットにENIを置き、プライベートDNSで多くのサービスに対応し、オンプレミスからも使える">
+        <defs><marker id="a-ep" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <text class="s-tb" x="220" y="22" text-anchor="middle">ゲートウェイ型</text>
+        <text class="s-tb" x="670" y="22" text-anchor="middle">インターフェイス型（PrivateLink）</text>
+        <rect class="s-zone-fill" x="20" y="36" width="400" height="160" rx="8"/>
+        <rect class="s-box2" x="40" y="60" width="110" height="44" rx="5"/><text class="s-t" x="95" y="87" text-anchor="middle">EC2</text>
+        <rect class="s-box" x="40" y="124" width="220" height="56" rx="5"/><text class="s-ts" x="150" y="144" text-anchor="middle">ルートテーブル</text><text class="s-mono" x="150" y="166" text-anchor="middle">pl-xxxx → vpce-gw</text>
+        <rect class="s-acc" x="276" y="60" width="132" height="44" rx="5"/><text class="s-t" x="342" y="87" text-anchor="middle">S3／DynamoDB</text>
+        <line class="s-l" x1="150" y1="82" x2="272" y2="82" marker-end="url(#a-ep)"/>
+        <text class="s-ts" x="220" y="216" text-anchor="middle">無料・同一リージョンのみ・VPC 外から使えない</text>
+        <rect class="s-zone-fill" x="470" y="36" width="410" height="160" rx="8"/>
+        <rect class="s-box2" x="490" y="60" width="110" height="44" rx="5"/><text class="s-t" x="545" y="87" text-anchor="middle">EC2</text>
+        <rect class="s-good" x="630" y="60" width="110" height="44" rx="5"/><text class="s-t" x="685" y="80" text-anchor="middle">ENI</text><text class="s-mono" x="685" y="96" text-anchor="middle">10.0.10.25</text>
+        <rect class="s-acc" x="770" y="60" width="96" height="44" rx="5"/><text class="s-t" x="818" y="80" text-anchor="middle">SSM・KMS</text><text class="s-t" x="818" y="96" text-anchor="middle">ECR など</text>
+        <line class="s-l" x1="600" y1="82" x2="626" y2="82" marker-end="url(#a-ep)"/><line class="s-l" x1="740" y1="82" x2="766" y2="82" marker-end="url(#a-ep)"/>
+        <rect class="s-box" x="490" y="124" width="250" height="56" rx="5"/><text class="s-ts" x="615" y="144" text-anchor="middle">プライベート DNS</text><text class="s-mono" x="615" y="166" text-anchor="middle">ssm.ap-northeast-1... → ENI</text>
+        <text class="s-ts" x="675" y="216" text-anchor="middle">時間＋データ料金・SG で制御・VPN/DX/ピア先からも利用可</text>
+      </svg>
+      </div>
+      <figcaption><b>2 種類の VPC エンドポイント。</b>S3 には両方の型があります。VPC 内からだけなら無料のゲートウェイ型、オンプレミスや別リージョンの VPC から使うならインターフェイス型を選びます。</figcaption>
+    </figure>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>項目</th><th>ゲートウェイ型エンドポイント</th><th>インターフェイス型エンドポイント</th></tr></thead>
+      <tbody>
+        <tr><td>対応サービス</td><td>S3、DynamoDB</td><td>大半の AWS サービス、他社や自社のエンドポイントサービス</td></tr>
+        <tr><td>仕組み</td><td>ルートテーブルにプレフィックスリスト宛てのルート</td><td>サブネットに ENI（プライベート IP）、DNS で解決</td></tr>
+        <tr><td>アクセス制御</td><td>エンドポイントポリシー</td><td>エンドポイントポリシー＋<strong>セキュリティグループ（443 を許可）</strong></td></tr>
+        <tr><td>料金</td><td>無料</td><td>時間料金＋処理データ量</td></tr>
+        <tr><td>VPC 外からの利用</td><td>不可（ピア VPC、VPN、DX から使えない）</td><td>可能</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <dl class="kv mt">
+      <dt>エンドポイントポリシー</dt><dd>エンドポイント経由で何ができるかを制限する。例：自社バケットだけに限定してデータ持ち出しを防ぐ。</dd>
+      <dt>バケット側の制限</dt><dd>バケットポリシーで <code>aws:SourceVpce</code>（特定エンドポイント経由のみ）や <code>aws:SourceVpc</code> を条件に許可／拒否。</dd>
+      <dt>エンドポイントサービス</dt><dd>自社のサービスを NLB（または GWLB）の背後に置き、PrivateLink で他の VPC・アカウントへ公開。利用者の接続は承認制にでき、許可するプリンシパルを指定。CIDR が重複していても使える。</dd>
+    </dl>
+    <h4>VPC ピアリング</h4>
+    <div class="prose">
+      <p>2 つの VPC を 1 対 1 でつなぎます。同一アカウント・別アカウント・別リージョンいずれも可能で、通信は AWS ネットワーク内を通ります。<strong>推移的ルーティングは不可</strong>（A–B、B–C がピアでも A から C へは行けない）、CIDR の重複は不可、相手側の IGW・NAT・VPN を経由する「エッジ間ルーティング」も不可です。</p>
+    </div>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>VPC-A（10.0.0.0/16）のルートテーブル</th><th>ターゲット</th></tr></thead>
+      <tbody>
+        <tr><td><code>10.0.0.0/16</code></td><td><code>local</code>（自動・削除不可）</td></tr>
+        <tr><td><code>192.168.0.0/16</code>（VPC-B の CIDR）</td><td><code>pcx-11111</code>（ピアリング接続）</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="prose mt">VPC-B 側にも <code>10.0.0.0/16 → pcx-11111</code> のルートが必要です。さらに両側の SG で相手の CIDR（同一リージョンなら相手の SG ID も可）を許可します。ピアリング接続は作成後に相手側で<strong>承諾</strong>しないと有効になりません（演習 PDF 問題 14）。</p>
+  </section>
+
+  <!-- ===== Hybrid ===== -->
+  <section class="sec" id="d5-hybrid">
+    <h3>Transit Gateway・VPN・ハイブリッド接続 <span class="sk">5.1.2</span> <span class="sk">5.3.4</span></h3>
+    <figure class="fig">
+      <div class="canvas">
+      <svg viewBox="0 0 900 270" role="img" aria-label="ピアリングでは4つのVPCをつなぐのに6本の接続が必要で推移的ルーティングができない。Transit Gatewayではハブに各VPCとVPNを1本ずつアタッチすれば相互に通信できる">
+        <defs><marker id="a-tgw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <text class="s-tb" x="200" y="22" text-anchor="middle">VPC ピアリング（メッシュ）</text>
+        <text class="s-tb" x="660" y="22" text-anchor="middle">Transit Gateway（ハブ＆スポーク）</text>
+        <rect class="s-box2" x="60" y="50" width="90" height="40" rx="5"/><text class="s-t" x="105" y="75" text-anchor="middle">VPC A</text>
+        <rect class="s-box2" x="250" y="50" width="90" height="40" rx="5"/><text class="s-t" x="295" y="75" text-anchor="middle">VPC B</text>
+        <rect class="s-box2" x="60" y="190" width="90" height="40" rx="5"/><text class="s-t" x="105" y="215" text-anchor="middle">VPC C</text>
+        <rect class="s-box2" x="250" y="190" width="90" height="40" rx="5"/><text class="s-t" x="295" y="215" text-anchor="middle">VPC D</text>
+        <line class="s-l" x1="150" y1="70" x2="250" y2="70"/><line class="s-l" x1="150" y1="210" x2="250" y2="210"/><line class="s-l" x1="105" y1="90" x2="105" y2="190"/><line class="s-l" x1="295" y1="90" x2="295" y2="190"/><line class="s-l" x1="150" y1="85" x2="250" y2="195"/><line class="s-l" x1="250" y1="85" x2="150" y2="195"/>
+        <text class="s-ts" x="200" y="256" text-anchor="middle">n(n-1)/2 本の接続・推移不可</text>
+        <rect class="s-acc" x="600" y="115" width="120" height="50" rx="8"/><text class="s-tb" x="660" y="145" text-anchor="middle">TGW</text>
+        <rect class="s-box2" x="470" y="40" width="90" height="40" rx="5"/><text class="s-t" x="515" y="65" text-anchor="middle">VPC A</text>
+        <rect class="s-box2" x="760" y="40" width="90" height="40" rx="5"/><text class="s-t" x="805" y="65" text-anchor="middle">VPC B</text>
+        <rect class="s-box2" x="470" y="200" width="90" height="40" rx="5"/><text class="s-t" x="515" y="225" text-anchor="middle">VPC C</text>
+        <rect class="s-box" x="760" y="200" width="110" height="40" rx="5"/><text class="s-t" x="815" y="225" text-anchor="middle">オンプレ（VPN）</text>
+        <line class="s-l" x1="560" y1="70" x2="610" y2="115"/><line class="s-l" x1="760" y1="70" x2="710" y2="115"/><line class="s-l" x1="560" y1="215" x2="610" y2="165"/><line class="s-l" x1="760" y1="215" x2="710" y2="165"/>
+        <text class="s-ts" x="660" y="256" text-anchor="middle">アタッチメントとTGWルートテーブルで制御</text>
+      </svg>
+      </div>
+      <figcaption><b>多数の VPC をつなぐならハブ型。</b>Transit Gateway は VPC・VPN・Direct Connect ゲートウェイ・他リージョンの TGW をアタッチし、TGW ルートテーブルの<strong>関連付け（どの表で経路を引くか）</strong>と<strong>伝播（どの経路を表に載せるか）</strong>で通信範囲を分けます。RAM で他アカウントに共有できます。</figcaption>
+    </figure>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>接続方式</th><th>要点</th><th>トラブルの典型</th></tr></thead>
+      <tbody>
+        <tr><td>Site-to-Site VPN</td><td>仮想プライベートゲートウェイ（VGW）または TGW とカスタマーゲートウェイ間の IPsec。<strong>トンネルは 2 本</strong>（冗長化のため両方を設定）。静的ルーティングか BGP の動的ルーティング。1 トンネルの帯域には上限がある（TGW と ECMP で複数 VPN を束ねて拡張）</td><td>トンネル DOWN（IKE/IPsec パラメータの不一致、オンプレ側ファイアウォールで UDP 500／4500 が閉じている、DPD タイムアウト）。トンネルは UP なのに通信できない → VPC のルートテーブルで<strong>ルート伝播</strong>が無効、SG／NACL、オンプレ側のルート。メトリクスは <code>TunnelState</code></td></tr>
+        <tr><td>Client VPN</td><td>個々の PC から VPC へリモートアクセス（OpenVPN 互換）。認証は相互証明書・Active Directory・SAML。<strong>承認ルール</strong>でアクセスできる宛先を、ルートテーブルで経路を指定。スプリットトンネルで VPC 宛て以外はローカルから出す</td><td>接続できても到達しない → 承認ルールとルートの不足、関連付けたサブネットの SG。クライアント CIDR が VPC と重複</td></tr>
+        <tr><td>Direct Connect（参考）</td><td>専用線。プライベート VIF（VPC）、パブリック VIF（AWS のパブリックサービス）、トランジット VIF（TGW）。既定では暗号化されない（MACsec か VPN を重ねる）。バックアップに VPN を併用</td><td>BGP セッションのダウン、経路広告の誤り、VPN との経路優先度</td></tr>
+        <tr><td>Transit Gateway</td><td>リージョン内のハブ。TGW ピアリングでリージョン間接続。ステートフルな検査アプライアンスを経由するなら<strong>アプライアンスモード</strong>で非対称ルーティングを防ぐ</td><td>アタッチメントの関連付け・伝播の漏れ、VPC 側サブネットのルートテーブルに TGW 宛てルートがない、ブラックホールルート</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout tip mt">
+      <span class="lbl">試験の着眼点：ハイブリッドの名前解決</span>
+      <p>VPN でつながったのにオンプレミスから <code>example.internal</code> が引けない → ネットワークではなく DNS の問題です。Route 53 Resolver のインバウンドエンドポイントとオンプレ DNS の条件付きフォワーダーを設定します（<a href="#d5-resolver">Resolver の節</a>）。</p>
+    </div>
+  </section>
+
+  <!-- ===== Protection ===== -->
+  <section class="sec" id="d5-protect">
+    <h3>ネットワーク保護サービスの監査 <span class="sk">5.1.3</span></h3>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>サービス</th><th>守る層・対象</th><th>監査で見るもの</th></tr></thead>
+      <tbody>
+        <tr><td>AWS WAF</td><td>L7（HTTP）。CloudFront・ALB・API Gateway・AppSync・Cognito などに Web ACL を関連付け。マネージドルールグループ、レートベースルール、IP セット、地域一致、Bot Control</td><td>Web ACL のログ（CloudWatch Logs のロググループ名は <code>aws-waf-logs-</code> で始める必要がある、または S3・Firehose）、サンプルリクエスト、<code>BlockedRequests</code>／<code>AllowedRequests</code> メトリクス。新ルールはまず <strong>Count モード</strong>で誤検知を確認</td></tr>
+        <tr><td>AWS Shield Standard</td><td>L3／L4 の一般的な DDoS。全アカウントで自動・無料</td><td>—</td></tr>
+        <tr><td>AWS Shield Advanced</td><td>CloudFront・Route 53・Global Accelerator・ELB・EIP の高度な DDoS 対策。Shield Response Team の支援、DDoS による利用料増加の補償、WAF と連携した L7 の自動緩和</td><td><code>DDoSDetected</code> などのメトリクス、イベントの詳細、保護対象リソースの一覧</td></tr>
+        <tr><td>AWS Network Firewall</td><td>VPC 単位のステートフル／ステートレス検査、IPS／IDS（Suricata 互換ルール）、ドメイン名でのアウトバウンド制限、TLS 検査</td><td>アラートログとフローログ（S3／CloudWatch Logs／Firehose）、ルールグループの適用状況、ルートテーブルが本当にファイアウォールエンドポイントを通っているか</td></tr>
+        <tr><td>Route 53 Resolver DNS Firewall</td><td>VPC から出る DNS クエリをドメインリストで許可・ブロック・アラート。マルウェアのドメインや DNS を使ったデータ持ち出しを防止。AWS マネージドのドメインリストあり</td><td>Resolver クエリログでブロックされた問い合わせ、フェイルオープン／フェイルクローズの設定</td></tr>
+        <tr><td>セキュリティグループ・NACL</td><td>ENI／サブネット</td><td>Config ルール（<code>restricted-ssh</code>、<code>vpc-sg-open-only-to-authorized-ports</code>）、Trusted Advisor、VPC フローログ</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <figure class="fig mt">
+      <div class="canvas">
+      <svg viewBox="0 0 900 230" role="img" aria-label="IGWのエッジルートテーブルで保護対象サブネット宛てをファイアウォールエンドポイントへ向け、保護対象サブネットのルートテーブルで0.0.0.0/0をファイアウォールエンドポイントへ向けることで、行きと帰りの両方を検査する">
+        <defs><marker id="a-nfw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <rect class="s-acc" x="20" y="90" width="110" height="50" rx="6"/><text class="s-tb" x="75" y="120" text-anchor="middle">IGW</text>
+        <rect class="s-zone-fill" x="190" y="40" width="250" height="150" rx="8"/><text class="s-tm" x="204" y="60">ファイアウォール専用サブネット</text>
+        <rect class="s-bad" x="230" y="90" width="170" height="50" rx="6"/><text class="s-tb" x="315" y="113" text-anchor="middle">Network Firewall</text><text class="s-ts" x="315" y="130" text-anchor="middle">エンドポイント</text>
+        <rect class="s-zone-fill" x="500" y="40" width="380" height="150" rx="8"/><text class="s-tm" x="514" y="60">保護対象のサブネット（ALB・EC2）</text>
+        <rect class="s-box2" x="620" y="90" width="150" height="50" rx="6"/><text class="s-tb" x="695" y="120" text-anchor="middle">ワークロード</text>
+        <line class="s-l" x1="130" y1="108" x2="226" y2="108" marker-end="url(#a-nfw)"/><line class="s-l" x1="400" y1="108" x2="616" y2="108" marker-end="url(#a-nfw)"/>
+        <line class="s-l s-dash" x1="616" y1="124" x2="404" y2="124" marker-end="url(#a-nfw)"/><line class="s-l s-dash" x1="226" y1="124" x2="134" y2="124" marker-end="url(#a-nfw)"/>
+        <text class="s-mono" x="75" y="214" text-anchor="middle">IGW ルート表：保護サブネット宛→FW</text>
+        <text class="s-mono" x="315" y="214" text-anchor="middle">FW サブネット：0.0.0.0/0→IGW</text>
+        <text class="s-mono" x="695" y="214" text-anchor="middle">保護サブネット：0.0.0.0/0→FW</text>
+      </svg>
+      </div>
+      <figcaption><b>Network Firewall の配置。</b>ファイアウォールエンドポイントは<strong>検査対象とは別の専用サブネット</strong>に置き、行き・帰りとも必ず通るようにルートテーブル（IGW に関連付けるエッジルートテーブルを含む）を組みます。検査対象と同じサブネットに置く案は誤りです（演習 PDF 問題 10）。</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== Network cost ===== -->
+  <section class="sec" id="d5-cost">
+    <h3>ネットワークアーキテクチャのコスト最適化 <span class="sk">5.1.4</span></h3>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>コストの発生源</th><th>削減策</th></tr></thead>
+      <tbody>
+        <tr><td>NAT ゲートウェイのデータ処理料金</td><td>S3・DynamoDB への通信は<strong>ゲートウェイ型エンドポイント</strong>へ（無料）。ECR・CloudWatch など頻繁に使うサービスはインターフェイス型エンドポイントと NAT の料金を比較。開発環境は NAT を置かない設計も検討</td></tr>
+        <tr><td>AZ 間のデータ転送</td><td>同じ AZ 内で完結させる（AZ ごとの NAT、同一 AZ のエンドポイント）。NLB のクロスゾーン負荷分散を有効にすると AZ 間転送が発生</td></tr>
+        <tr><td>インターネットへのデータ転送（アウト）</td><td>CloudFront を前段に置く（オリジンから CloudFront への転送は無料で、CloudFront からの配信単価の方が有利な場合が多い）。圧縮、キャッシュヒット率の向上</td></tr>
+        <tr><td>パブリック IPv4 アドレス</td><td>使っていない Elastic IP を解放、パブリック IP が不要なインスタンスはプライベートに、IPv6 の活用</td></tr>
+        <tr><td>Transit Gateway</td><td>アタッチメントの時間料金＋処理データ料金。少数の VPC 間の大容量通信なら VPC ピアリング（時間料金なし）の方が安い場合がある</td></tr>
+        <tr><td>リージョン間転送</td><td>レプリケーションの対象を必要なものに絞る、圧縮</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout tip mt">
+      <span class="lbl">試験の着眼点</span>
+      <p>「プライベートサブネットのインスタンスが S3 と大量にやり取りしていて NAT ゲートウェイの料金が高い」→ <strong>S3 のゲートウェイ型 VPC エンドポイント</strong>を作り、プライベートサブネットのルートテーブルに関連付ける、が定番の正解です。料金の内訳は Cost Explorer の使用タイプ（<code>NatGateway-Bytes</code>、<code>DataTransfer-Regional-Bytes</code> など）で確認します。</p>
+    </div>
+  </section>

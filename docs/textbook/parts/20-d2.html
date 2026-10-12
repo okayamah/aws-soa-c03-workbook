@@ -1,0 +1,492 @@
+
+<!-- ================= Chapter 2 ================= -->
+<section class="chapter" id="d2">
+  <div class="chapter-head">
+    <span class="num"><span class="dot d2"></span>CONTENT DOMAIN 2 · TASK 2.1 / 2.2 / 2.3</span>
+    <h2>信頼性と事業の継続性</h2>
+    <div class="meta"><span class="weight">採点対象の 22%</span><span class="weight">約 11 問</span></div>
+  </div>
+  <div class="prose">
+    <p>C02 から重みが最も増えた分野です。「負荷に合わせて伸縮する（2.1）」「壊れても止まらない（2.2）」「壊れたら戻せる（2.3）」の 3 段で構成されます。数値（RTO・RPO、保持期間、フェイルオーバー時間）と、各サービスの設定項目の意味を正確に覚えることが得点に直結します。</p>
+  </div>
+
+  <!-- ===== ASG ===== -->
+  <section class="sec" id="d2-asg">
+    <h3>EC2 Auto Scaling <span class="sk">2.1.1</span></h3>
+    <div class="prose">
+      <p>Auto Scaling グループ（ASG）は「最小」「希望（desired）」「最大」の 3 つのキャパシティで動きます。スケーリングポリシーが変更するのは<strong>希望キャパシティ</strong>で、その値は常に最小〜最大の範囲に収まります。最大が 1 なら、どんなポリシーを作っても 2 台目は起動しません。</p>
+    </div>
+    <h4>スケーリングポリシーの種類</h4>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>ポリシー</th><th>動き</th><th>選ぶ場面</th></tr></thead>
+      <tbody>
+        <tr><td>ターゲット追跡</td><td>指定メトリクスを目標値（例：平均 CPU 50%）に保つよう自動で増減。アラームは自動作成</td><td><strong>第一選択</strong>。予測できない負荷変動。定義済みメトリクスは <code>ASGAverageCPUUtilization</code>・<code>ASGAverageNetworkIn/Out</code>・<code>ALBRequestCountPerTarget</code></td></tr>
+        <tr><td>ステップ</td><td>アラームの超過幅に応じて段階的に追加・削除（例：+20% で 1 台、+40% で 3 台）</td><td>急激な負荷に大きく反応させたい</td></tr>
+        <tr><td>シンプル</td><td>アラームごとに 1 つの調整。実行後はクールダウン（既定 300 秒）が終わるまで次を実行しない</td><td>旧来方式。現在はステップかターゲット追跡が推奨</td></tr>
+        <tr><td>スケジュール</td><td>日時を指定して最小・最大・希望を変更</td><td>毎朝 9 時の出社、月末バッチなど<strong>予測できる</strong>負荷</td></tr>
+        <tr><td>予測スケーリング</td><td>過去の負荷パターン（最低 24 時間、最大 14 日分）から機械学習で予測し、事前に起動</td><td>日次・週次の周期的な負荷。まず「予測のみ」モードで精度を確認</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout pdf mt">
+      <span class="lbl">演習 PDF の論点（問題 12）</span>
+      <p>最大キャパシティ 1 の ASG は実質スケールしない → <strong>最大キャパシティを増やす</strong>。さらに CPU の高負荷に追従させるには、<strong>グループ全体の平均 CPU 使用率</strong>に基づくポリシーを追加します（「1 台が 90% を超えたら」という個別インスタンス基準のポリシーは作れません）。最小や希望を増やすのは常時の台数を増やすだけで、予測できないピークへの対策としては不適切です。</p>
+    </div>
+
+    <h4>インスタンスのライフサイクル</h4>
+    <figure class="fig">
+      <div class="canvas">
+      <svg viewBox="0 0 900 270" role="img" aria-label="Pending から InService、Terminating から Terminated への遷移。ライフサイクルフックで Pending:Wait と Terminating:Wait に止めて処理できる。Standby とウォームプールもある">
+        <defs><marker id="a-lcy" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker>
+        <marker id="a-lcy-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-ha" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <rect class="s-box" x="20" y="40" width="120" height="44" rx="6"/><text class="s-tb" x="80" y="67" text-anchor="middle">Pending</text>
+        <rect class="s-acc" x="180" y="40" width="140" height="44" rx="6"/><text class="s-tb" x="250" y="62" text-anchor="middle">Pending:Wait</text><text class="s-ts" x="250" y="78" text-anchor="middle">起動フック</text>
+        <rect class="s-box" x="360" y="40" width="140" height="44" rx="6"/><text class="s-tb" x="430" y="67" text-anchor="middle">Pending:Proceed</text>
+        <rect class="s-good" x="540" y="40" width="140" height="44" rx="6"/><text class="s-tb" x="610" y="67" text-anchor="middle">InService</text>
+        <line class="s-l" x1="140" y1="62" x2="176" y2="62" marker-end="url(#a-lcy)"/>
+        <line class="s-l" x1="320" y1="62" x2="356" y2="62" marker-end="url(#a-lcy)"/>
+        <line class="s-l" x1="500" y1="62" x2="536" y2="62" marker-end="url(#a-lcy)"/>
+        <rect class="s-box2" x="740" y="40" width="140" height="44" rx="6"/><text class="s-tb" x="810" y="67" text-anchor="middle">Standby</text>
+        <path class="s-l" d="M680 54 H736" marker-end="url(#a-lcy)"/><path class="s-l" d="M740 72 H684" marker-end="url(#a-lcy)"/>
+        <text class="s-ts" x="710" y="102" text-anchor="middle">一時的に外す</text>
+        <rect class="s-box" x="540" y="170" width="140" height="44" rx="6"/><text class="s-tb" x="610" y="197" text-anchor="middle">Terminating</text>
+        <rect class="s-acc" x="360" y="170" width="140" height="44" rx="6"/><text class="s-tb" x="430" y="192" text-anchor="middle">Terminating:Wait</text><text class="s-ts" x="430" y="208" text-anchor="middle">終了フック</text>
+        <rect class="s-box" x="164" y="170" width="168" height="44" rx="6"/><text class="s-tb" x="248" y="197" text-anchor="middle">Terminating:Proceed</text>
+        <rect class="s-bad" x="20" y="170" width="120" height="44" rx="6"/><text class="s-tb" x="80" y="197" text-anchor="middle">Terminated</text>
+        <line class="s-l" x1="610" y1="84" x2="610" y2="166" marker-end="url(#a-lcy)"/>
+        <text class="s-ts" x="618" y="130">スケールイン／異常判定</text>
+        <line class="s-l" x1="540" y1="192" x2="504" y2="192" marker-end="url(#a-lcy)"/>
+        <line class="s-l" x1="360" y1="192" x2="336" y2="192" marker-end="url(#a-lcy)"/>
+        <line class="s-l" x1="164" y1="192" x2="144" y2="192" marker-end="url(#a-lcy)"/>
+        <rect class="s-zone-fill" x="20" y="110" width="160" height="40" rx="6"/><text class="s-t" x="100" y="135" text-anchor="middle">ウォームプール</text>
+        <path class="s-la" d="M100 110 V92" marker-end="url(#a-lcy-acc)"/>
+        <text class="s-ts" x="190" y="134">事前初期化済み（停止／実行中／休止）</text>
+        <text class="s-ts" x="250" y="244" text-anchor="middle">フック待機中に：ログ退避・ドレイン</text>
+        <text class="s-ts" x="250" y="30" text-anchor="middle">フック待機中に：ソフト導入・登録</text>
+      </svg>
+      </div>
+      <figcaption><b>ASG のインスタンスの状態遷移。</b>ライフサイクルフックは起動時・終了時にインスタンスを待機状態で止め、EventBridge や SNS への通知を受けた処理（設定投入、ログの退避）が終わってから <code>CONTINUE</code> で先へ進めます。既定のタイムアウトは 1 時間で、ハートビートで延長できます。</figcaption>
+    </figure>
+
+    <h4>運用で問われる設定</h4>
+    <dl class="kv">
+      <dt>起動テンプレート</dt><dd>AMI・インスタンスタイプ・SG・ユーザーデータなどをバージョン管理。起動設定（Launch Configuration）は旧方式で新規作成できなくなっている。設定を変えるときは新バージョンを作る。</dd>
+      <dt>ヘルスチェック</dt><dd>既定は <strong>EC2 ステータスチェック</strong>のみ。ALB の背後なら <strong>ELB ヘルスチェックを有効化</strong>しないと、アプリが応答しなくても入れ替えられない。</dd>
+      <dt>ヘルスチェックの猶予期間</dt><dd>起動直後の初期化中に異常判定されないための待ち時間。短すぎると起動→異常→終了を繰り返す。</dd>
+      <dt>インスタンスのウォームアップ</dt><dd>新しいインスタンスが集約メトリクスに寄与し始めるまでの時間。過剰なスケールアウトを防ぐ。</dd>
+      <dt>終了ポリシー</dt><dd>既定はまず AZ 間の台数を均等にし、次に古い起動テンプレート／設定のものから終了。<code>OldestInstance</code>・<code>NewestInstance</code>・<code>ClosestToNextInstanceHour</code> などを指定可能。スケールインから保護したいインスタンスには<strong>スケールイン保護</strong>。</dd>
+      <dt>インスタンスの更新</dt><dd>起動テンプレートの新バージョンへ、最小正常率を保ちながら順に置き換える（ローリング）。チェックポイント、アラームによる自動ロールバックに対応。</dd>
+      <dt>混合インスタンスポリシー</dt><dd>複数のインスタンスタイプとオンデマンド／スポットを組み合わせる。スポットの配分戦略は <code>price-capacity-optimized</code> が推奨。<strong>キャパシティの再調整</strong>で中断が近いスポットを先に置き換える。</dd>
+      <dt>プロセスの一時停止</dt><dd><code>Launch</code>・<code>Terminate</code>・<code>HealthCheck</code>・<code>ReplaceUnhealthy</code>・<code>AZRebalance</code> などを止められる。調査のために異常インスタンスを残したいときは <code>ReplaceUnhealthy</code> を停止するか、Standby に移す。</dd>
+      <dt>最大インスタンス有効期間</dt><dd>一定期間を超えたインスタンスを自動で置き換え、長期稼働による劣化や設定ずれを防ぐ。</dd>
+    </dl>
+
+    <h4>起動できない：InsufficientInstanceCapacity</h4>
+    <div class="prose">
+      <p>特定の AZ で特定のインスタンスタイプの在庫が一時的に不足しているときに出るエラーです。ASG の台数設定を変えても AWS 側の在庫は増えません。</p>
+    </div>
+    <ol class="ladder mt">
+      <li><div><span class="q">別の AZ でも起動できるようにする</span><p class="a">ASG に複数 AZ のサブネットを指定する。単一 AZ 指定をやめる。</p></div></li>
+      <li><div><span class="q">別のインスタンスタイプも使えるようにする</span><p class="a">混合インスタンスポリシーで複数タイプを許可、起動テンプレートのタイプを変更。</p></div></li>
+      <li><div><span class="q">時間をおいて再試行・リクエストを分割</span><p class="a">在庫は頻繁に変わる。大量の同時起動は小分けに。</p></div></li>
+      <li><div><span class="q">確実性が必要ならキャパシティを予約</span><p class="a">オンデマンドキャパシティ予約で事前に確保する（使わなくても課金）。起動テンプレートで予約を対象にすれば ASG からも使えます。</p></div></li>
+    </ol>
+    <div class="callout pdf mt">
+      <span class="lbl">演習 PDF の論点（問題 5）と補足</span>
+      <p>即効性のある対策として「インスタンスタイプを変える」「AZ を変える」が正解。PDF の解説はキャパシティ予約を「ASG には適用できない」としていますが、起動テンプレートでキャパシティ予約を指定する方法で ASG からも利用できます。設問の文脈（一時的なエラーへの対処、コスト）で不正解になっていると理解してください。</p>
+    </div>
+  </section>
+
+  <!-- ===== Cache ===== -->
+  <section class="sec" id="d2-cache">
+    <h3>キャッシュによるスケーラビリティ <span class="sk">2.1.2</span></h3>
+    <div class="prose">
+      <p>キャッシュは「同じデータを何度も作らない・取りに行かない」ことで、後段（オリジンや DB）の負荷を下げ、スケールの必要性そのものを減らします。置き場所によってサービスが変わります。</p>
+    </div>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>置き場所</th><th>サービス</th><th>効く対象</th></tr></thead>
+      <tbody>
+        <tr><td>利用者の近く（エッジ）</td><td>CloudFront</td><td>静的コンテンツ、キャッシュ可能な API 応答。オリジンへのリクエスト数を削減（詳細は<a href="#d5-cf">第 5 章</a>）</td></tr>
+        <tr><td>アプリと DB の間</td><td>ElastiCache（Valkey／Redis OSS／Memcached）</td><td>RDS のクエリ結果、セッション、ランキングなど</td></tr>
+        <tr><td>DynamoDB の前段</td><td>DynamoDB Accelerator（DAX）</td><td>DynamoDB の読み取りをマイクロ秒に。API 互換でアプリの改修が少ない</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <h4>ElastiCache のエンジン比較</h4>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>項目</th><th>Valkey／Redis OSS</th><th>Memcached</th></tr></thead>
+      <tbody>
+        <tr><td>データ構造</td><td>文字列・リスト・ハッシュ・ソート済みセットなど豊富</td><td>単純なキーと値</td></tr>
+        <tr><td>レプリケーションとフェイルオーバー</td><td class="yes">あり（レプリカ、マルチ AZ 自動フェイルオーバー）</td><td class="no">なし</td></tr>
+        <tr><td>永続化・バックアップ</td><td class="yes">あり（スナップショット）</td><td class="no">なし</td></tr>
+        <tr><td>スケール方法</td><td>クラスターモードでシャード追加（オンラインで再シャーディング）、レプリカ追加</td><td>ノード追加（マルチスレッドで縦にも強い）</td></tr>
+        <tr><td>向いている用途</td><td>セッションストア、ランキング、Pub/Sub、高可用性が必要なキャッシュ</td><td>消えても困らない単純なキャッシュ</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <dl class="kv mt">
+      <dt>遅延読み込み</dt><dd>キャッシュになければ DB から読んでキャッシュに書く。必要なデータだけ載るが、初回は遅く、データが古くなりうる（TTL で鮮度を管理）。</dd>
+      <dt>書き込みスルー</dt><dd>DB への書き込み時にキャッシュも更新。常に新しいが、使われないデータもキャッシュされる。</dd>
+      <dt>Evictions</dt><dd>メモリ不足で追い出された件数。増えていたらノードサイズを上げるかシャードを増やす。</dd>
+      <dt>CacheHits / CacheMisses</dt><dd>ヒット率の低下は TTL が短すぎる、キー設計の問題などのサイン。</dd>
+      <dt>EngineCPUUtilization</dt><dd>Valkey／Redis はシングルスレッド処理のため、ホスト全体の CPU よりこちらを見る。</dd>
+      <dt>ElastiCache Serverless</dt><dd>容量計画なしで自動スケールするデプロイ方式。負荷が読めないときの選択肢。</dd>
+    </dl>
+  </section>
+
+  <!-- ===== DB scaling ===== -->
+  <section class="sec" id="d2-dbscale">
+    <h3>マネージドデータベースのスケーリング <span class="sk">2.1.3</span></h3>
+    <div class="grid2">
+      <div class="card"><span class="tag">Amazon RDS</span><h5>RDS のスケール手段</h5><ul><li><strong>垂直</strong>：インスタンスクラスの変更（ダウンタイムあり。マルチ AZ ならスタンバイを先に変更してフェイルオーバーするため短い）。</li><li><strong>読み取り</strong>：リードレプリカ（非同期レプリケーション。別リージョンも可。昇格して独立 DB にできる）。</li><li><strong>ストレージ</strong>：ストレージの自動スケーリング。空きが 10% 未満の状態が 5 分続き、前回変更から 6 時間経過していると、設定した上限まで自動拡張。</li></ul></div>
+      <div class="card"><span class="tag">Amazon Aurora</span><h5>Aurora のスケール手段</h5><ul><li>最大 15 台の Aurora レプリカ。<strong>リーダーエンドポイント</strong>で読み取りを分散。</li><li><strong>Aurora Auto Scaling</strong>：レプリカ数をターゲット追跡で増減。メトリクスはリーダーの平均 CPU（<code>RDSReaderAverageCPUUtilization</code>）か平均接続数（<code>RDSReaderAverageDatabaseConnections</code>）。ライターは計算に含まれない。</li><li>ストレージは自動で拡張（容量の事前確保は不要）。</li><li><strong>Aurora Serverless v2</strong>：ACU（Aurora キャパシティユニット）単位で秒単位に伸縮。プロビジョンドのインスタンスと同じクラスターに混在できる。</li></ul></div>
+    </div>
+    <div class="callout pdf mt">
+      <span class="lbl">演習 PDF の論点（問題 13）</span>
+      <p>接続数 1,200 で性能が落ちる Aurora → Aurora Auto Scaling のターゲット値を<strong>1,000</strong>（性能劣化の手前）にする。新しいレプリカが使えるようになるまで数分かかるため、限界値そのもの（1,200）をターゲットにすると間に合いません。レプリカの昇格はフェイルオーバーの仕組みでスケーリングではありません。</p>
+    </div>
+
+    <h4>DynamoDB のキャパシティ</h4>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>モード</th><th>課金</th><th>向いている負荷</th><th>スロットリングへの備え</th></tr></thead>
+      <tbody>
+        <tr><td>プロビジョンド</td><td>RCU・WCU を時間単位で確保</td><td>予測できる定常負荷（オンデマンドより安い）</td><td><strong>Auto Scaling</strong>（Application Auto Scaling でターゲット使用率を維持）。短時間のスパイクは未使用分を貯めたバーストキャパシティ（最大 300 秒分）でしのぐ</td></tr>
+        <tr><td>オンデマンド</td><td>リクエスト単位</td><td>新規・予測不能・急峻なスパイク、使われない時間が長い</td><td>キャパシティ計画が不要。ただし単価はプロビジョンドより高い</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <dl class="kv mt">
+      <dt>RCU</dt><dd>1 RCU = 4 KB までの項目を 1 秒に<strong>強い整合性で 1 回</strong>、または<strong>結果整合性で 2 回</strong>読める。トランザクション読み取りは 2 倍消費。</dd>
+      <dt>WCU</dt><dd>1 WCU = 1 KB までの項目を 1 秒に 1 回書ける。トランザクション書き込みは 2 倍。</dd>
+      <dt>スロットリング</dt><dd><code>ProvisionedThroughputExceededException</code>、メトリクス <code>ThrottledRequests</code>・<code>ReadThrottleEvents</code>・<code>WriteThrottleEvents</code>。特定のパーティションキーにアクセスが集中する<strong>ホットパーティション</strong>はキー設計の見直しが必要（適応型キャパシティがある程度吸収）。</dd>
+      <dt>GSI</dt><dd>グローバルセカンダリインデックスの書き込みキャパシティが不足すると、<strong>ベーステーブルへの書き込みもスロットリング</strong>される。GSI 側のキャパシティも監視する。</dd>
+      <dt>グローバルテーブル</dt><dd>複数リージョンでの読み書き（マルチアクティブ）。DR とレイテンシー改善のための機能で、単一リージョンの性能改善策ではない。</dd>
+    </dl>
+    <div class="callout pdf mt">
+      <span class="lbl">演習 PDF の論点（問題 22）</span>
+      <p>定常的な負荷があり、時々スパイクで性能が落ちる DynamoDB を「コスト効率よく」改善 → プロビジョンドのまま <strong>Auto Scaling を有効化</strong>。オンデマンドは定常負荷では割高、DAX は高価、グローバルテーブルは目的が違います。</p>
+    </div>
+  </section>
+
+  <!-- ===== ELB ===== -->
+  <section class="sec" id="d2-elb">
+    <h3>Elastic Load Balancing とヘルスチェック <span class="sk">2.2.1</span></h3>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>項目</th><th>ALB</th><th>NLB</th><th>GWLB</th></tr></thead>
+      <tbody>
+        <tr><td>レイヤー</td><td>L7（HTTP/HTTPS/gRPC）</td><td>L4（TCP/UDP/TLS）</td><td>L3（GENEVE 6081）</td></tr>
+        <tr><td>ルーティング</td><td>パス・ホスト・ヘッダー・クエリ文字列・メソッド</td><td>ポート単位</td><td>すべての IP パケットをアプライアンスへ</td></tr>
+        <tr><td>ターゲット</td><td>インスタンス・IP・Lambda</td><td>インスタンス・IP・ALB</td><td>インスタンス・IP（ファイアウォール等）</td></tr>
+        <tr><td>固定 IP</td><td>なし（DNS 名で参照）</td><td>AZ ごとに固定 IP、Elastic IP 割り当て可</td><td>—</td></tr>
+        <tr><td>クライアント IP</td><td><code>X-Forwarded-For</code> ヘッダー</td><td>そのまま保持（設定による）、プロキシプロトコル v2</td><td>保持</td></tr>
+        <tr><td>クロスゾーン負荷分散</td><td>既定で有効（料金なし）</td><td>既定で無効（有効化すると AZ 間転送料金）</td><td>既定で無効</td></tr>
+        <tr><td>主な用途</td><td>Web アプリ、マイクロサービス、WAF の統合、OIDC 認証</td><td>超低遅延、非 HTTP、PrivateLink のエンドポイントサービス</td><td>サードパーティ製の検査アプライアンスの透過挿入</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <h4>ターゲットグループのヘルスチェック設定</h4>
+    <dl class="kv">
+      <dt>Protocol / Port / Path</dt><dd>どこに問い合わせるか。Path は軽量で依存先の状態も反映する専用エンドポイント（例 <code>/health</code>）が理想。</dd>
+      <dt>HealthyThresholdCount</dt><dd>何回連続成功で「正常」に戻すか。</dd>
+      <dt>UnhealthyThresholdCount</dt><dd>何回連続失敗で「異常」とするか。</dd>
+      <dt>Interval / Timeout</dt><dd>問い合わせ間隔と応答待ち時間。</dd>
+      <dt>Matcher</dt><dd>成功とみなす HTTP コード（既定 200）。認証が必要なパスは 302／401 を返すので異常扱いになる典型例。</dd>
+      <dt>登録解除の遅延</dt><dd>Connection Draining。既定 300 秒。処理中のリクエストを完了させてからターゲットを外す。</dd>
+      <dt>スロースタート</dt><dd>新しいターゲットへのリクエストを徐々に増やす（ALB）。</dd>
+    </dl>
+    <figure class="fig mt">
+      <div class="canvas">
+      <svg viewBox="0 0 900 250" role="img" aria-label="HTTPエラーの発生箇所。460はクライアントが切断、502はターゲットの不正応答、503は登録済みターゲットなし、504はターゲットの応答タイムアウト、ターゲットの5xxはアプリが返したもの">
+        <defs><marker id="a-elb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <rect class="s-box" x="20" y="90" width="130" height="60" rx="6"/><text class="s-tb" x="85" y="125" text-anchor="middle">クライアント</text>
+        <rect class="s-acc" x="330" y="70" width="180" height="100" rx="6"/><text class="s-tb" x="420" y="112" text-anchor="middle">ALB</text><text class="s-ts" x="420" y="132" text-anchor="middle">HTTPCode_ELB_*</text>
+        <rect class="s-box" x="690" y="90" width="190" height="60" rx="6"/><text class="s-tb" x="785" y="118" text-anchor="middle">ターゲット（アプリ）</text><text class="s-ts" x="785" y="136" text-anchor="middle">HTTPCode_Target_*</text>
+        <line class="s-l" x1="150" y1="120" x2="326" y2="120" marker-end="url(#a-elb)"/>
+        <line class="s-l" x1="510" y1="120" x2="686" y2="120" marker-end="url(#a-elb)"/>
+        <text class="s-mono" x="238" y="58" text-anchor="middle">460</text><text class="s-ts" x="238" y="76" text-anchor="middle">クライアントが先に切断</text>
+        <text class="s-mono" x="600" y="30" text-anchor="middle">502 Bad Gateway</text><text class="s-ts" x="600" y="46" text-anchor="middle">接続拒否・不正な応答・Lambda の応答形式誤り</text>
+        <text class="s-mono" x="600" y="76" text-anchor="middle">504 Gateway Timeout</text><text class="s-ts" x="600" y="92" text-anchor="middle">アイドルタイムアウト内に応答なし</text>
+        <text class="s-mono" x="420" y="200" text-anchor="middle">503 Service Unavailable</text><text class="s-ts" x="420" y="216" text-anchor="middle">ターゲットグループに登録済みターゲットがない</text>
+        <text class="s-mono" x="785" y="180" text-anchor="middle">500〜599（Target）</text><text class="s-ts" x="785" y="196" text-anchor="middle">アプリ自身が返したエラー</text>
+      </svg>
+      </div>
+      <figcaption><b>エラーコードから発生箇所を特定する。</b><code>HTTPCode_ELB_5XX_Count</code> はロードバランサーが生成したエラー、<code>HTTPCode_Target_5XX_Count</code> はアプリが返したエラーです。前者ならネットワーク・ターゲットの状態、後者ならアプリのログを調べます。</figcaption>
+    </figure>
+    <h4>ターゲットが Unhealthy になる原因</h4>
+    <ol class="ladder">
+      <li><div><span class="q">セキュリティグループ</span><p class="a">ターゲットの SG が、ALB の SG（またはサブネット CIDR）からのヘルスチェックポートを許可しているか。NACL の戻り（エフェメラルポート）も確認。</p></div></li>
+      <li><div><span class="q">パスと応答コード</span><p class="a">ヘルスチェックパスが存在し、Matcher のコードを返しているか（リダイレクトや認証で 301/302/401 になっていないか）。</p></div></li>
+      <li><div><span class="q">アプリの起動とポート</span><p class="a">アプリがヘルスチェックのポートで待ち受けているか。起動に時間がかかるなら ASG のヘルスチェック猶予期間を延ばす。</p></div></li>
+      <li><div><span class="q">タイムアウト</span><p class="a">依存先（DB など）が遅くてヘルスチェックの Timeout を超えていないか。</p></div></li>
+    </ol>
+    <dl class="kv mt">
+      <dt>アクセスログ</dt><dd>既定で無効。S3 に出力（バケットポリシーで ELB のログ配信を許可）。各リクエストの処理時間、ELB とターゲットの応答コードが分かる（読み方は<a href="#d5-logs">第 5 章</a>）。</dd>
+      <dt>その他のメトリクス</dt><dd><code>TargetResponseTime</code>・<code>HealthyHostCount</code>／<code>UnHealthyHostCount</code>・<code>RejectedConnectionCount</code>（ALB の接続上限）・<code>RequestCount</code>。</dd>
+    </dl>
+  </section>
+
+  <!-- ===== Route 53 health checks ===== -->
+  <section class="sec" id="d2-r53hc">
+    <h3>Route 53 ヘルスチェックと DNS フェイルオーバー <span class="sk">2.2.1</span></h3>
+    <div class="grid3">
+      <div class="card"><span class="tag">エンドポイントの監視</span><h5>エンドポイント</h5><p>IP またはドメイン名に HTTP/HTTPS/TCP で問い合わせ。世界各地のヘルスチェッカーが実行し、<strong>18% 超</strong>のチェッカーが正常と判定すれば正常。間隔は標準 30 秒／高速 10 秒、失敗のしきい値は既定 3 回。応答本文の先頭 5,120 バイトに特定文字列があるかも確認可能。<strong>ファイアウォールでヘルスチェッカーの IP 範囲を許可</strong>する必要あり。</p></div>
+      <div class="card"><span class="tag">他のヘルスチェックの集約</span><h5>計算済み（Calculated）</h5><p>子のヘルスチェックのうち何個以上が正常なら正常、と判定。複数コンポーネントの総合状態を 1 つにまとめる。</p></div>
+      <div class="card"><span class="tag">プライベートなリソース</span><h5>CloudWatch アラーム</h5><p>ヘルスチェッカーはインターネット側から問い合わせるため、<strong>VPC 内のプライベートなリソースには届かない</strong>。そのリソースのメトリクスでアラームを作り、そのアラームの状態をヘルスチェックに使う。</p></div>
+    </div>
+    <figure class="fig mt">
+      <div class="canvas">
+      <svg viewBox="0 0 860 230" role="img" aria-label="フェイルオーバールーティング。プライマリの東京ALBのヘルスチェックが失敗すると、Route 53はセカンダリの大阪ALBのレコードを返す">
+        <defs><marker id="a-fo" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker>
+        <marker id="a-fo-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-hb" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <rect class="s-box" x="20" y="90" width="120" height="50" rx="6"/><text class="s-tb" x="80" y="120" text-anchor="middle">利用者</text>
+        <rect class="s-acc" x="200" y="80" width="170" height="70" rx="6"/><text class="s-tb" x="285" y="108" text-anchor="middle">Route 53</text><text class="s-ts" x="285" y="128" text-anchor="middle">フェイルオーバーレコード</text>
+        <line class="s-l" x1="140" y1="115" x2="196" y2="115" marker-end="url(#a-fo)"/>
+        <rect class="s-bad" x="520" y="30" width="210" height="60" rx="6"/><text class="s-tb" x="625" y="56" text-anchor="middle">プライマリ：東京 ALB</text><text class="s-ts" x="625" y="74" text-anchor="middle">ヘルスチェック失敗</text>
+        <rect class="s-good" x="520" y="140" width="210" height="60" rx="6"/><text class="s-tb" x="625" y="166" text-anchor="middle">セカンダリ：大阪 ALB</text><text class="s-ts" x="625" y="184" text-anchor="middle">または S3 の静的サイト</text>
+        <path class="s-lb s-dash" d="M370 100 L516 60" marker-end="url(#a-fo-b)"/>
+        <path class="s-l" d="M370 130 L516 170" marker-end="url(#a-fo)"/>
+        <text class="s-ts" x="440" y="70" text-anchor="middle">返さない</text>
+        <text class="s-ts" x="440" y="172" text-anchor="middle">回答を切替</text>
+        <rect class="s-box2" x="760" y="30" width="90" height="60" rx="6"/><text class="s-t" x="805" y="56" text-anchor="middle">ヘルス</text><text class="s-t" x="805" y="74" text-anchor="middle">チェッカー</text>
+        <path class="s-l s-dash" d="M760 60 H734" marker-end="url(#a-fo)"/>
+      </svg>
+      </div>
+      <figcaption><b>フェイルオーバールーティング。</b>プライマリのレコードにヘルスチェックを関連付け、失敗するとセカンダリを回答します。エイリアスレコードでは「ターゲットのヘルスを評価」を有効にすると、ALB 自体の正常性を引き継げます。DNS の TTL があるので切り替えは即時ではありません。</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===== Multi-AZ ===== -->
+  <section class="sec" id="d2-multiaz">
+    <h3>マルチ AZ と耐障害性 <span class="sk">2.2.2</span></h3>
+    <figure class="fig">
+      <div class="canvas">
+      <svg viewBox="0 0 900 250" role="img" aria-label="RDSのマルチAZインスタンスは同期レプリケーションで読み取り不可のスタンバイ、マルチAZクラスターは読み取り可能なスタンバイ2台、リードレプリカは非同期で読み取り可能">
+        <defs><marker id="a-maz" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker>
+        <marker id="a-maz-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-ha" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <text class="s-tb" x="150" y="22" text-anchor="middle">マルチ AZ 配置（インスタンス）</text>
+        <text class="s-tb" x="450" y="22" text-anchor="middle">マルチ AZ DB クラスター</text>
+        <text class="s-tb" x="750" y="22" text-anchor="middle">リードレプリカ</text>
+        <rect class="s-good" x="40" y="50" width="220" height="44" rx="6"/><text class="s-tb" x="150" y="77" text-anchor="middle">プライマリ（読み書き）</text>
+        <rect class="s-box2" x="40" y="150" width="220" height="44" rx="6"/><text class="s-tb" x="150" y="177" text-anchor="middle">スタンバイ（読み取り不可）</text>
+        <line class="s-la" x1="150" y1="94" x2="150" y2="146" marker-end="url(#a-maz-a)"/><text class="s-ts" x="160" y="125">同期</text>
+        <text class="s-ts" x="150" y="222" text-anchor="middle">フェイルオーバー 60〜120 秒、DNS 切替</text>
+        <rect class="s-good" x="340" y="50" width="220" height="44" rx="6"/><text class="s-tb" x="450" y="77" text-anchor="middle">ライター</text>
+        <rect class="s-box" x="340" y="150" width="104" height="44" rx="6"/><text class="s-t" x="392" y="171" text-anchor="middle">リーダー</text><text class="s-tm" x="392" y="186" text-anchor="middle">読取可</text>
+        <rect class="s-box" x="456" y="150" width="104" height="44" rx="6"/><text class="s-t" x="508" y="171" text-anchor="middle">リーダー</text><text class="s-tm" x="508" y="186" text-anchor="middle">読取可</text>
+        <line class="s-la" x1="420" y1="94" x2="392" y2="146" marker-end="url(#a-maz-a)"/><line class="s-la" x1="480" y1="94" x2="508" y2="146" marker-end="url(#a-maz-a)"/>
+        <text class="s-ts" x="450" y="125" text-anchor="middle">準同期</text>
+        <text class="s-ts" x="450" y="222" text-anchor="middle">3 AZ、フェイルオーバー通常 35 秒程度</text>
+        <rect class="s-good" x="640" y="50" width="220" height="44" rx="6"/><text class="s-tb" x="750" y="77" text-anchor="middle">ソース DB</text>
+        <rect class="s-box" x="640" y="150" width="220" height="44" rx="6"/><text class="s-tb" x="750" y="177" text-anchor="middle">レプリカ（読み取り専用）</text>
+        <line class="s-l s-dash" x1="750" y1="94" x2="750" y2="146" marker-end="url(#a-maz)"/><text class="s-ts" x="760" y="125">非同期（遅延あり）</text>
+        <text class="s-ts" x="750" y="222" text-anchor="middle">別リージョン可、手動で昇格</text>
+      </svg>
+      </div>
+      <figcaption><b>RDS の冗長化 3 方式。</b>可用性が目的ならマルチ AZ、読み取り性能が目的ならリードレプリカです。マルチ AZ 配置のスタンバイは読み取りに使えない点が頻出です。</figcaption>
+    </figure>
+    <dl class="kv mt">
+      <dt>RDS マルチ AZ の自動フェイルオーバー</dt><dd>プライマリの AZ 障害、インスタンスの障害、インスタンスクラスの変更、OS パッチ適用、「フェイルオーバーありの再起動」で発生。エンドポイント（DNS 名）は変わらず、指す先が切り替わる。アプリは DNS の再解決と再接続が必要（RDS Proxy で短縮）。</dd>
+      <dt>Aurora</dt><dd>データは 3 AZ に 6 コピー。ライター障害時はレプリカを昇格（優先度ティア 0〜15 の小さいものから）。レプリカがなければ新しいライターを作り直すため時間がかかる → <strong>別 AZ に最低 1 台のレプリカ</strong>を置く。</dd>
+      <dt>Aurora グローバルデータベース</dt><dd>リージョン間で 1 秒未満のレプリケーション。リージョン障害時はセカンダリリージョンを昇格（計画的な切り替えと、障害時のフェイルオーバーの 2 方式）。</dd>
+      <dt>ElastiCache</dt><dd>Valkey／Redis でマルチ AZ ＋自動フェイルオーバーを有効化し、レプリカを別 AZ に置く。</dd>
+      <dt>EC2 と ASG</dt><dd>ASG に複数 AZ のサブネットを指定。AZ の台数が偏ると AZ リバランスで均等化。</dd>
+      <dt>NAT ゲートウェイ</dt><dd>従来の NAT ゲートウェイは<strong>AZ 単位のリソース</strong>。AZ ごとに作り、各 AZ のプライベートサブネットは同じ AZ の NAT を向けないと、その AZ の障害で全体の外向き通信が止まる。2025 年 11 月からは複数 AZ に自動で広がる<strong>リージョナル NAT ゲートウェイ</strong>も選べる。</dd>
+      <dt>EFS／S3／DynamoDB</dt><dd>リージョンサービスで、標準で複数 AZ に冗長化（EFS One Zone と S3 One Zone-IA は除く）。</dd>
+      <dt>Application Recovery Controller</dt><dd>ゾーンシフトで、障害の兆候がある AZ への ALB／NLB のトラフィックを一時的に止める。ゾーンオートシフトを有効にすると、AWS が AZ の障害を検知したときに自動でシフト。ルーティングコントロールで、リージョン間の切り替えを安全なスイッチとして扱える。</dd>
+    </dl>
+    <div class="callout pdf mt">
+      <span class="lbl">演習 PDF の論点（問題 7 の誤答）</span>
+      <p>「性能改善のためにマルチ AZ を有効化」は誤り。マルチ AZ 配置のスタンバイは読み取りを受け付けないため、性能は上がりません。</p>
+    </div>
+  </section>
+
+  <!-- ===== Backup ===== -->
+  <section class="sec" id="d2-backup">
+    <h3>AWS Backup とスナップショットの自動化 <span class="sk">2.3.1</span></h3>
+    <figure class="fig">
+      <div class="canvas">
+      <svg viewBox="0 0 900 260" role="img" aria-label="バックアッププランのルールがスケジュールと保持を決め、リソースの割り当てで対象をタグ指定し、KMSで暗号化されたボールトに保存、別リージョンや別アカウントのボールトへコピー">
+        <defs><marker id="a-bk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <rect class="s-acc" x="20" y="30" width="250" height="200" rx="8"/><text class="s-tb" x="145" y="56" text-anchor="middle">バックアッププラン</text>
+        <rect class="s-box" x="40" y="72" width="210" height="70" rx="5"/><text class="s-tb" x="145" y="94" text-anchor="middle">バックアップルール</text><text class="s-ts" x="145" y="112" text-anchor="middle">頻度（cron）・ウィンドウ</text><text class="s-ts" x="145" y="130" text-anchor="middle">ライフサイクル・コピー先</text>
+        <rect class="s-box" x="40" y="152" width="210" height="62" rx="5"/><text class="s-tb" x="145" y="176" text-anchor="middle">リソースの割り当て</text><text class="s-ts" x="145" y="196" text-anchor="middle">タグ（例 backup=daily）・ARN</text>
+        <rect class="s-box2" x="330" y="30" width="180" height="200" rx="8"/><text class="s-tb" x="420" y="56" text-anchor="middle">対象リソース</text>
+        <text class="s-ts" x="420" y="84" text-anchor="middle">EC2・EBS</text><text class="s-ts" x="420" y="106" text-anchor="middle">RDS・Aurora</text><text class="s-ts" x="420" y="128" text-anchor="middle">DynamoDB</text><text class="s-ts" x="420" y="150" text-anchor="middle">EFS・FSx</text><text class="s-ts" x="420" y="172" text-anchor="middle">S3</text><text class="s-ts" x="420" y="194" text-anchor="middle">Storage Gateway など</text>
+        <line class="s-l" x1="250" y1="183" x2="326" y2="150" marker-end="url(#a-bk)"/>
+        <rect class="s-good" x="570" y="60" width="150" height="110" rx="8"/><text class="s-tb" x="645" y="90" text-anchor="middle">バックアップ</text><text class="s-tb" x="645" y="110" text-anchor="middle">ボールト</text><text class="s-ts" x="645" y="134" text-anchor="middle">KMS で暗号化</text><text class="s-ts" x="645" y="152" text-anchor="middle">Vault Lock</text>
+        <line class="s-l" x1="510" y1="115" x2="566" y2="115" marker-end="url(#a-bk)"/>
+        <text class="s-ts" x="538" y="106" text-anchor="middle">保存</text>
+        <rect class="s-box" x="760" y="40" width="125" height="60" rx="6"/><text class="s-t" x="822" y="66" text-anchor="middle">別リージョン</text><text class="s-t" x="822" y="84" text-anchor="middle">のボールト</text>
+        <rect class="s-box" x="760" y="130" width="125" height="60" rx="6"/><text class="s-t" x="822" y="156" text-anchor="middle">別アカウント</text><text class="s-t" x="822" y="174" text-anchor="middle">のボールト</text>
+        <line class="s-l s-dash" x1="720" y1="95" x2="756" y2="75" marker-end="url(#a-bk)"/>
+        <line class="s-l s-dash" x1="720" y1="140" x2="756" y2="158" marker-end="url(#a-bk)"/>
+        <text class="s-ts" x="738" y="222" text-anchor="middle">コピー（DR・ランサムウェア対策）</text>
+      </svg>
+      </div>
+      <figcaption><b>AWS Backup の構成要素。</b>「いつ・どれだけ残すか」はプランのルール、「何を」はリソースの割り当て、「どこに」はボールトで決めます。暗号化はボールトのキーで行われます（サービスが独自に暗号化する一部リソースはソースの暗号化を引き継ぎます）。</figcaption>
+    </figure>
+    <dl class="kv mt">
+      <dt>ライフサイクル</dt><dd>N 日後にコールドストレージへ移行、M 日後に削除。<strong>コールドストレージは最低 90 日</strong>保持が必要なので、削除日は「移行日＋90 日」以上。コールドに対応するリソースは EFS、DynamoDB（高度な機能）、EBS、S3 などに限られる。</dd>
+      <dt>Vault Lock</dt><dd>ボールト内のバックアップを削除・保持期間の短縮から守る（WORM）。ガバナンスモードは十分な権限があれば解除可能、コンプライアンスモードは猶予期間（最低 72 時間）経過後は<strong>誰も解除できない</strong>。</dd>
+      <dt>論理的にエアギャップされたボールト</dt><dd>別アカウントと共有でき、AWS が管理するキーでロック状態になる。ランサムウェアからの復旧用。</dd>
+      <dt>組織での一元管理</dt><dd>Organizations のバックアップポリシーで、全アカウントに同じプランを強制。委任管理者でクロスアカウントの監視。</dd>
+      <dt>Backup Audit Manager</dt><dd>「すべての RDS が毎日バックアップされているか」「保持期間が 35 日以上か」などをフレームワークとして評価しレポート。</dd>
+      <dt>復元テスト</dt><dd>定期的に自動で復元を実行し、バックアップが実際に使えるか検証。</dd>
+      <dt>Data Lifecycle Manager との違い</dt><dd>DLM は EBS スナップショットと EBS-backed AMI 専用でシンプル。複数サービスをまとめ、監査・クロスアカウントコピー・ロックまで必要なら AWS Backup。</dd>
+    </dl>
+    <div class="callout pdf mt">
+      <span class="lbl">演習 PDF の論点（問題 16）</span>
+      <ul>
+        <li>「24 時間ごと・1 年後にコールドストレージ・暗号化」→ <strong>カスタマーマネージドキーで暗号化したボールトを作成</strong>し、<strong>日次ルールとライフサイクル（365 日でコールド）を持つバックアッププラン</strong>に DynamoDB テーブルを割り当てる。スケジュールやライフサイクルはボールトではなくプランの設定です。</li>
+        <li>DynamoDB の PITR は過去 35 日以内の任意時点への復元で、日次スケジュールやコールド移行の機能はありません。</li>
+        <li>AWS Backup から DynamoDB を復元すると、Auto Scaling ポリシー、タグ、IAM ポリシー、CloudWatch アラーム、TTL、ストリーム設定は<strong>復元されない</strong>ので、IaC やスクリプトで再適用する準備をしておきます。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== DB restore ===== -->
+  <section class="sec" id="d2-restore">
+    <h3>データベースの復元と RTO・RPO <span class="sk">2.3.2</span></h3>
+    <div class="prose">
+      <p><strong>RPO</strong>（目標復旧時点）は「どこまで遡ってデータを失ってよいか」、<strong>RTO</strong>（目標復旧時間）は「どれだけの時間で復旧すべきか」です。復元方法は、この 2 つとコストの兼ね合いで選びます。</p>
+    </div>
+    <figure class="fig mt">
+      <div class="canvas">
+      <svg viewBox="0 0 900 200" role="img" aria-label="RDS自動バックアップは日次スナップショットと5分ごとのトランザクションログで、保持期間内の任意の時点へ新しいインスタンスとして復元できる">
+        <defs><marker id="a-pitr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker>
+        <marker id="a-pitr-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-ha" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <line class="s-l" x1="40" y1="90" x2="860" y2="90" marker-end="url(#a-pitr)"/>
+        <rect class="f-d2" x="80" y="66" width="18" height="48" rx="3"/><rect class="f-d2" x="330" y="66" width="18" height="48" rx="3"/><rect class="f-d2" x="580" y="66" width="18" height="48" rx="3"/>
+        <text class="s-ts" x="89" y="58" text-anchor="middle">日次スナップショット</text><text class="s-ts" x="339" y="58" text-anchor="middle">日次スナップショット</text><text class="s-ts" x="589" y="58" text-anchor="middle">日次スナップショット</text>
+        <g class="f-muted"><rect x="120" y="84" width="6" height="12"/><rect x="150" y="84" width="6" height="12"/><rect x="180" y="84" width="6" height="12"/><rect x="210" y="84" width="6" height="12"/><rect x="240" y="84" width="6" height="12"/><rect x="270" y="84" width="6" height="12"/><rect x="300" y="84" width="6" height="12"/><rect x="370" y="84" width="6" height="12"/><rect x="400" y="84" width="6" height="12"/><rect x="430" y="84" width="6" height="12"/><rect x="460" y="84" width="6" height="12"/><rect x="490" y="84" width="6" height="12"/><rect x="520" y="84" width="6" height="12"/><rect x="550" y="84" width="6" height="12"/><rect x="620" y="84" width="6" height="12"/><rect x="650" y="84" width="6" height="12"/><rect x="680" y="84" width="6" height="12"/><rect x="710" y="84" width="6" height="12"/><rect x="740" y="84" width="6" height="12"/></g>
+        <text class="s-ts" x="430" y="122" text-anchor="middle">トランザクションログ（約 5 分ごとに S3 へ）</text>
+        <line class="s-lb" x1="690" y1="40" x2="690" y2="132"/><text class="s-tb" x="690" y="30" text-anchor="middle">障害・誤操作</text>
+        <line class="s-la" x1="665" y1="60" x2="665" y2="132"/><text class="s-ts" x="660" y="150" text-anchor="end">復元ポイント（直前）</text>
+        <text class="s-mono" x="790" y="78" text-anchor="middle">LatestRestorableTime</text><line class="s-l s-dash" x1="760" y1="84" x2="760" y2="132"/>
+        <path class="s-la" d="M665 132 V172 H574" marker-end="url(#a-pitr-a)"/>
+        <rect class="s-acc" x="250" y="156" width="320" height="34" rx="5"/><text class="s-tb" x="410" y="178" text-anchor="middle">新しい DB インスタンス（新エンドポイント）</text>
+      </svg>
+      </div>
+      <figcaption><b>ポイントインタイム復元（PITR）の仕組み。</b>直近のスナップショットに、その後のトランザクションログを適用して指定時刻の状態を作ります。復元先は常に<strong>新しい DB インスタンス</strong>なので、アプリの接続先を切り替える必要があります（RPO は約 5 分）。</figcaption>
+    </figure>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>方法</th><th>復元できる範囲</th><th>RPO の目安</th><th>RTO と注意点</th></tr></thead>
+      <tbody>
+        <tr><td>RDS 自動バックアップ（PITR）</td><td>保持期間（1〜35 日）内の任意の時点</td><td>約 5 分</td><td>新インスタンス作成のため数十分。保持期間 0 で無効化。別リージョンへの自動バックアップレプリケーションも可</td></tr>
+        <tr><td>RDS 手動スナップショット</td><td>取得時点</td><td>取得間隔に依存</td><td>削除するまで保持（35 日を超えて残せる）。別リージョン・別アカウントへコピー／共有可能（暗号化済みならカスタマーマネージドキーの共有も必要）</td></tr>
+        <tr><td>Aurora バックトラック</td><td>最大 72 時間前まで</td><td>秒単位</td><td><strong>新クラスターを作らず同じクラスターを巻き戻す</strong>ので最速。Aurora MySQL のみ</td></tr>
+        <tr><td>Aurora クローン</td><td>現時点のコピー</td><td>—</td><td>コピーオンライトで高速に複製。検証用環境に</td></tr>
+        <tr><td>DynamoDB PITR</td><td>過去 1〜35 日（期間は設定可能）の任意の秒</td><td>秒単位</td><td>新しいテーブルとして復元</td></tr>
+        <tr><td>DynamoDB オンデマンドバックアップ</td><td>取得時点</td><td>取得間隔に依存</td><td>長期保存。AWS Backup 経由ならコールド移行・リージョン間コピー</td></tr>
+        <tr><td>Aurora グローバルデータベース</td><td>セカンダリリージョン</td><td>通常 1 秒未満</td><td>リージョン障害時に 1 分程度で昇格</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout trap mt">
+      <span class="lbl">ひっかけ注意</span>
+      <ul>
+        <li>RDS の復元で「既存のインスタンスに上書き」はできません。復元後に DNS（Route 53 の CNAME）やアプリの設定で接続先を切り替えます。</li>
+        <li>リードレプリカがある RDS では自動バックアップを無効化（保持期間 0）できません。</li>
+        <li>暗号化されていない RDS を暗号化するには、スナップショット → 暗号化を指定してコピー → そこから復元、の手順です。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===== Versioning ===== -->
+  <section class="sec" id="d2-versioning">
+    <h3>ストレージのバージョニング <span class="sk">2.3.3</span></h3>
+    <div class="grid2">
+      <div class="card"><span class="tag">Amazon S3</span><h5>S3 バージョニング</h5><ul><li>状態は「未設定 → 有効 → 停止」。<strong>一度有効にすると未設定には戻せない</strong>（停止のみ）。</li><li>削除するとオブジェクトは消えず<strong>削除マーカー</strong>が付く。削除マーカーを消せば復活。特定のバージョン ID を指定した削除は完全削除。</li><li>古いバージョンも課金対象 → ライフサイクルの「非現行バージョン」ルールで移行・削除。</li><li><strong>MFA Delete</strong>：バージョンの完全削除とバージョニング状態の変更に MFA を要求。ルートユーザーが CLI／API で設定。</li><li>レプリケーション（CRR／SRR）は送信元・送信先の両方でバージョニングが必須。</li></ul></div>
+      <div class="card"><span class="tag">Amazon FSx</span><h5>FSx のバージョン管理</h5><ul><li><strong>FSx for Windows File Server</strong>：シャドウコピー（VSS）を有効にすると、利用者が Windows エクスプローラーの「以前のバージョン」から自分で復元できる。</li><li><strong>FSx for NetApp ONTAP</strong>：ボリュームのスナップショットを定期取得。<code>.snapshot</code> ディレクトリから復元。</li><li>どちらも自動日次バックアップ（保持期間設定）と AWS Backup に対応。</li></ul></div>
+    </div>
+    <h4>S3 の保護機能の組み合わせ</h4>
+    <div class="tw">
+    <table class="t">
+      <thead><tr><th>機能</th><th>防げること</th><th>前提</th></tr></thead>
+      <tbody>
+        <tr><td>バージョニング</td><td>上書き・誤削除からの復旧</td><td>—</td></tr>
+        <tr><td>Object Lock（ガバナンスモード）</td><td>保持期間中の削除・上書き。特別な権限を持つユーザーは解除可能</td><td>バージョニング必須</td></tr>
+        <tr><td>Object Lock（コンプライアンスモード）</td><td>保持期間中は<strong>ルートユーザーを含め誰も</strong>削除・短縮できない</td><td>バージョニング必須</td></tr>
+        <tr><td>リーガルホールド</td><td>期限なしで削除を禁止（解除するまで）</td><td>バージョニング必須。<code>s3:PutObjectLegalHold</code> で付け外し</td></tr>
+        <tr><td>レプリケーション</td><td>リージョン障害、アカウント侵害（別アカウントへ）</td><td>バージョニング必須。既存オブジェクトはバッチレプリケーション。RTC で 15 分以内の複製を SLA で保証</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout pdf mt">
+      <span class="lbl">演習 PDF の論点（問題 27）</span>
+      <p>ガバナンスモードでロックされたオブジェクトを削除するには、<strong><code>s3:BypassGovernanceRetention</code> 権限</strong>と、リクエストでの<strong>バイパスの明示</strong>（ヘッダー <code>x-amz-bypass-governance-retention: true</code>、CLI では <code>aws s3api delete-object ... --bypass-governance-retention</code>）の両方が必要です。PDF の選択肢には綴りの誤り（retertion）がありますが、正しくは retention です。</p>
+    </div>
+  </section>
+
+  <!-- ===== DR ===== -->
+  <section class="sec" id="d2-dr">
+    <h3>ディザスタリカバリ戦略 <span class="sk">2.3.4</span></h3>
+    <figure class="fig">
+      <div class="canvas">
+      <svg viewBox="0 0 900 300" role="img" aria-label="左から右へコストが上がりRTOとRPOが短くなる。バックアップと復元は数時間、パイロットライトは数十分、ウォームスタンバイは数分、マルチサイトのアクティブアクティブはほぼゼロ">
+        <defs><marker id="a-dr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="s-h" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+        <line class="s-l" x1="40" y1="268" x2="870" y2="268" marker-end="url(#a-dr)"/>
+        <text class="s-ts" x="40" y="290">コスト・複雑さ：低</text><text class="s-ts" x="868" y="290" text-anchor="end">高</text>
+        <g>
+        <rect class="s-box" x="40" y="20" width="190" height="230" rx="6"/>
+        <text class="s-tb" x="135" y="44" text-anchor="middle">バックアップと復元</text>
+        <text class="s-mono" x="135" y="66" text-anchor="middle">RPO/RTO：時間単位</text>
+        <rect class="f-d2" x="60" y="86" width="150" height="26" rx="3" style="opacity:.25"/><text class="s-ts" x="135" y="104" text-anchor="middle">DR 側：バックアップのみ</text>
+        <text class="s-ts" x="135" y="140" text-anchor="middle">スナップショットを</text><text class="s-ts" x="135" y="158" text-anchor="middle">別リージョンへコピー</text>
+        <text class="s-ts" x="135" y="190" text-anchor="middle">障害時に IaC で</text><text class="s-ts" x="135" y="208" text-anchor="middle">環境ごと作って復元</text>
+        </g>
+        <g>
+        <rect class="s-box" x="250" y="20" width="190" height="230" rx="6"/>
+        <text class="s-tb" x="345" y="44" text-anchor="middle">パイロットライト</text>
+        <text class="s-mono" x="345" y="66" text-anchor="middle">RPO/RTO：数十分</text>
+        <rect class="f-d2" x="270" y="86" width="150" height="26" rx="3" style="opacity:.5"/><text class="s-ts" x="345" y="104" text-anchor="middle">DR 側：データ層が稼働</text>
+        <text class="s-ts" x="345" y="140" text-anchor="middle">DB はレプリケーション中</text><text class="s-ts" x="345" y="158" text-anchor="middle">サーバーは停止／未作成</text>
+        <text class="s-ts" x="345" y="190" text-anchor="middle">障害時にアプリ層を</text><text class="s-ts" x="345" y="208" text-anchor="middle">起動・スケールアウト</text>
+        </g>
+        <g>
+        <rect class="s-box" x="460" y="20" width="190" height="230" rx="6"/>
+        <text class="s-tb" x="555" y="44" text-anchor="middle">ウォームスタンバイ</text>
+        <text class="s-mono" x="555" y="66" text-anchor="middle">RPO/RTO：分単位</text>
+        <rect class="f-d2" x="480" y="86" width="150" height="26" rx="3" style="opacity:.75"/><text class="s-ts" x="555" y="104" text-anchor="middle">DR 側：縮小版が稼働</text>
+        <text class="s-ts" x="555" y="140" text-anchor="middle">全コンポーネントが</text><text class="s-ts" x="555" y="158" text-anchor="middle">最小台数で動作中</text>
+        <text class="s-ts" x="555" y="190" text-anchor="middle">障害時はスケールして</text><text class="s-ts" x="555" y="208" text-anchor="middle">DNS を切り替え</text>
+        </g>
+        <g>
+        <rect class="s-box" x="670" y="20" width="200" height="230" rx="6"/>
+        <text class="s-tb" x="770" y="44" text-anchor="middle">マルチサイト（Active/Active）</text>
+        <text class="s-mono" x="770" y="66" text-anchor="middle">RPO/RTO：ほぼゼロ</text>
+        <rect class="f-d2" x="690" y="86" width="160" height="26" rx="3"/><text class="s-ts" x="770" y="104" text-anchor="middle" style="fill:#fff">DR 側：本番と同規模</text>
+        <text class="s-ts" x="770" y="140" text-anchor="middle">両リージョンで</text><text class="s-ts" x="770" y="158" text-anchor="middle">トラフィックを処理</text>
+        <text class="s-ts" x="770" y="190" text-anchor="middle">グローバルテーブル・</text><text class="s-ts" x="770" y="208" text-anchor="middle">Aurora Global 等</text>
+        </g>
+      </svg>
+      </div>
+      <figcaption><b>DR 戦略 4 種。</b>帯の濃さは DR 側で常時稼働している割合を表します。右に行くほど RTO・RPO が短くなり、コストが上がります。設問の RTO／RPO と予算に合う最も左の戦略を選ぶのが基本です。</figcaption>
+    </figure>
+    <div class="tw mt">
+    <table class="t">
+      <thead><tr><th>戦略</th><th>DR 側の状態</th><th>使う AWS の仕組み</th></tr></thead>
+      <tbody>
+        <tr><td>バックアップと復元</td><td>データのコピーだけ</td><td>AWS Backup のリージョン間コピー、S3 CRR、AMI／スナップショットのコピー、CloudFormation で環境を再作成</td></tr>
+        <tr><td>パイロットライト</td><td>データ層のみ常時稼働、アプリ層はオフ</td><td>RDS のクロスリージョンリードレプリカ、Aurora Global、DynamoDB グローバルテーブル、停止中の ASG（希望 0）</td></tr>
+        <tr><td>ウォームスタンバイ</td><td>全体が縮小規模で稼働</td><td>最小台数の ASG、Route 53 のフェイルオーバー／加重ルーティング</td></tr>
+        <tr><td>マルチサイト アクティブ/アクティブ</td><td>本番と同規模で常に処理</td><td>Route 53 のレイテンシー／加重ルーティング、Global Accelerator、DynamoDB グローバルテーブル、Aurora Global（書き込み転送）</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="callout tip mt">
+      <span class="lbl">試験の着眼点：DR 手順のベストプラクティス</span>
+      <ul>
+        <li>復旧手順は<strong>IaC とランブックでコード化</strong>し、定期的に<strong>訓練（復元テスト・フェイルオーバー演習）</strong>する。手順書を読みながらの手作業は RTO を守れない原因になります。</li>
+        <li>AMI、KMS キー、シークレット、パラメーターなど「リージョンに閉じたもの」を DR リージョンにも用意しておく（AMI のコピー、マルチリージョンキー、Secrets Manager のレプリカ）。</li>
+        <li>サービスクォータは DR リージョンでも引き上げておく。いざというときに起動できない原因になります。</li>
+      </ul>
+    </div>
+  </section>
+</section>
